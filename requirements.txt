@@ -1,0 +1,7 @@
+ipykernel
+numpy
+matplotlib
+scikit-image
+structure-tensor
+pillow
+tifftools
