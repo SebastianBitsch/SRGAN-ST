@@ -2,3 +2,6 @@
 *.tif
 *.tiff
 femur_01
+*.cpython*
+.ipynb_checkpoints
+__pycache__
