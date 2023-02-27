@@ -5,3 +5,4 @@ femur_01
 *.cpython*
 .ipynb_checkpoints
 __pycache__
+SRGAN/data
