@@ -1,7 +1,23 @@
-import cv2
-import numpy as np
+import multiprocessing
 import math
-import sys, time
+import sys
+import argparse
+import os
+import shutil
+
+import cv2
+
+from tqdm import tqdm
+import numpy as np
+
+# Usage:
+# python utils/bicubic.py --images_dir="SRGAN/data/Set5/LRbicx16" --output_dir="bicubic_test"
+
+def listdir_nohidden(path):
+    """ List dir but ignores hidden files; .DSStore etc."""
+    for f in os.listdir(path):
+        if not f.startswith('.'):
+            yield f
 
 # Interpolation kernel
 def u(s,a):
@@ -84,14 +100,51 @@ def bicubic(img, ratio, a):
     sys.stderr.flush()
     return dst
 
-# Read image
-img = cv2.imread('butterfly.png')
 
-# Scale factor
-ratio = 2
-# Coefficient
-a = -1/2
+# # Read image
+# img = cv2.imread('butterfly.png')
 
-dst = bicubic(img, ratio, a)
-print('Completed!')
-cv2.imwrite('bicubic_butterfly.png', dst)
+# # Scale factor
+# ratio = 2
+# # Coefficient
+# a = -1/2
+
+# dst = bicubic(img, ratio, a)
+# print('Completed!')
+# cv2.imwrite('bicubic_butterfly.png', dst)
+
+def main(args):
+    if os.path.exists(args.output_dir):
+        shutil.rmtree(args.output_dir)
+    os.makedirs(args.output_dir)
+
+    # Get all image paths
+    image_file_names = os.listdir(args.images_dir)
+    
+    # Splitting images with multiple threads
+    progress_bar = tqdm(total=len(image_file_names), unit="image", desc="Prepare split image")
+    workers_pool = multiprocessing.Pool(args.num_workers)
+    for image_file_name in image_file_names:
+        workers_pool.apply_async(worker, args=(image_file_name, args), callback=lambda arg: progress_bar.update(1))
+    workers_pool.close()
+    workers_pool.join()
+    progress_bar.close()
+
+
+def worker(image_file_name: str, args) -> None:
+    image = cv2.imread(f"{args.images_dir}/{image_file_name}", cv2.IMREAD_UNCHANGED)
+
+    res = bicubic(image, args.scale_factor, args.coeff)
+    cv2.imwrite(f"{args.output_dir}/{image_file_name.split('.')[-2]}_bucubic{args.scale_factor}x.{image_file_name.split('.')[-1]}", res)
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Prepare database scripts.")
+    parser.add_argument("--images_dir", type=str, help="Path to input image directory.")
+    parser.add_argument("--output_dir", type=str, help="Path to generator image directory.")
+    parser.add_argument("--scale_factor", default=4, type=int, help="The scale factor 4x default")
+    parser.add_argument("--coeff", type=float, default=-0.5, help="Coefficient variable, dont know what it means")
+    parser.add_argument("--num_workers", default=4, type=int, help="How many threads to open at the same time.")
+    args = parser.parse_args()
+
+    main(args)
