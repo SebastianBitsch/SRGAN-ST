@@ -13,6 +13,7 @@
 # ==============================================================================
 import os
 import time
+from typing import Union
 
 import torch
 from torch import nn
@@ -167,7 +168,7 @@ def main():
                         is_last)
 
 
-def load_dataset() -> [CUDAPrefetcher, CUDAPrefetcher]:
+def load_dataset() -> Union[CUDAPrefetcher, CUDAPrefetcher]:
     # Load train, test and valid datasets
     train_datasets = TrainValidImageDataset(srgan_config.train_gt_images_dir,
                                             srgan_config.gt_image_size,
@@ -198,7 +199,7 @@ def load_dataset() -> [CUDAPrefetcher, CUDAPrefetcher]:
     return train_prefetcher, test_prefetcher
 
 
-def build_model() -> [nn.Module, nn.Module, nn.Module]:
+def build_model() -> tuple[nn.Module, nn.Module, nn.Module]:
     d_model = model.__dict__[srgan_config.d_arch_name]()
     g_model = model.__dict__[srgan_config.g_arch_name](in_channels=srgan_config.in_channels,
                                                        out_channels=srgan_config.out_channels,
@@ -210,7 +211,7 @@ def build_model() -> [nn.Module, nn.Module, nn.Module]:
     return d_model, g_model
 
 
-def define_loss() -> [nn.MSELoss, model.content_loss, nn.BCEWithLogitsLoss]:
+def define_loss() -> tuple[nn.MSELoss, model.content_loss, nn.BCEWithLogitsLoss]:
     pixel_criterion = nn.MSELoss()
     content_criterion = model.content_loss(feature_model_extractor_node=srgan_config.feature_model_extractor_node,
                                            feature_model_normalize_mean=srgan_config.feature_model_normalize_mean,
@@ -225,7 +226,7 @@ def define_loss() -> [nn.MSELoss, model.content_loss, nn.BCEWithLogitsLoss]:
     return pixel_criterion, content_criterion, adversarial_criterion
 
 
-def define_optimizer(d_model, g_model) -> [optim.Adam, optim.Adam]:
+def define_optimizer(d_model, g_model) -> tuple[optim.Adam, optim.Adam]:
     d_optimizer = optim.Adam(d_model.parameters(),
                              srgan_config.model_lr,
                              srgan_config.model_betas,
@@ -243,7 +244,7 @@ def define_optimizer(d_model, g_model) -> [optim.Adam, optim.Adam]:
 def define_scheduler(
         d_optimizer: optim.Adam,
         g_optimizer: optim.Adam
-) -> [lr_scheduler.StepLR, lr_scheduler.StepLR]:
+) -> tuple[lr_scheduler.StepLR, lr_scheduler.StepLR]:
     d_scheduler = lr_scheduler.StepLR(d_optimizer,
                                       srgan_config.lr_scheduler_step_size,
                                       srgan_config.lr_scheduler_gamma)
@@ -405,7 +406,7 @@ def validate(
         psnr_model: nn.Module,
         ssim_model: nn.Module,
         mode: str
-) -> [float, float]:
+) -> tuple[float, float]:
     # Calculate how many batches of data are in each Epoch
     batch_time = AverageMeter("Time", ":6.3f")
     psnres = AverageMeter("PSNR", ":4.2f")
