@@ -5,3 +5,5 @@ scikit-image
 structure-tensor
 pillow
 tifftools
+tqdm
+opencv-python
