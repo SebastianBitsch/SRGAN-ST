@@ -42,6 +42,8 @@ mode = "train"
 # Experiment name, easy to save weights and log files
 exp_name = "SRGAN_x4-DIV2K"
 
+save_checkpoints = False
+
 if mode == "train":
     # Dataset address
     train_gt_images_dir = f"./data/ImageNet/SRGAN/train"

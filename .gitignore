@@ -6,3 +6,4 @@ femur_01
 .ipynb_checkpoints
 __pycache__
 SRGAN/data
+logs

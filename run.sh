@@ -20,7 +20,7 @@
 ### -- specify that the cores must be on the same host -- 
 #BSUB -R "span[hosts=1]"
 
-### -- specify that we need 5GB of memory per core/slot -- 
+### -- specify that we need 2GB of memory per core/slot -- 
 #BSUB -R "rusage[mem=5GB]"
 
 ### -- set walltime limit: hh:mm --
@@ -39,7 +39,7 @@ nvidia-smi
 
 now=$(date +"%Y-%m-%d-%H:%M")
 
-exp_names=("ExpNone" "Exp1" "Exp2" "Exp3")
+exp_names=("ExpNone" "Exp0" "Exp1" "Exp2")
 
 pixel_weights=(0.0 1.0 1.0 1.0)
 content_weights=(0.0 1.0 1.0 1.0)
@@ -47,7 +47,7 @@ adversarial_weights=(0.0 0.001 0.001 0.001)
 
 source .env/bin/activate
 
-module load python3/3.10.7
+# module load python3/3.10.7
 # module load cuda/11.7
 
 name="${exp_names[${LSB_JOBINDEX}]}-$now"

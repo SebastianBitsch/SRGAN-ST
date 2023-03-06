@@ -141,6 +141,8 @@ def main():
         is_last = (epoch + 1) == srgan_config.epochs
         best_psnr = max(psnr, best_psnr)
         best_ssim = max(ssim, best_ssim)
+        if not srgan_config.save_checkpoints:
+            continue
         save_checkpoint({"epoch": epoch + 1,
                          "best_psnr": best_psnr,
                          "best_ssim": best_ssim,
@@ -474,11 +476,19 @@ if __name__ == "__main__":
                     prog = 'SRGAN-ST',
                     description = 'Does super resolution',
                     epilog = 'Text at the bottom of help bla bla')
-    parser.add_argument('exp_name', type=str, help='The name of the experiment', default="SRGAN_x4-DIV2K")
-    
+    parser.add_argument('-exp_name', type=str, help='The name of the experiment', default="SRGAN_x4-DIV2K")
+
+    parser.add_argument('-pixel_weight', type=float, help='Loss', default=1.0)
+    parser.add_argument('-content_weight', type=float, help='Loss', default=1.0)
+    parser.add_argument('-adversarial_weight', type=float, help='Loss', default=1.0)
+
     args = parser.parse_args()
 
     srgan_config.exp_name = args.exp_name
+    srgan_config.pixel_weight = args.pixel_weight
+    srgan_config.content_weight = args.content_weight
+    srgan_config.adversarial_weight = args.adversarial_weight
 
-    main()
+    print(args)
+    # main()
 
