@@ -6,9 +6,13 @@
 * https://th3.gbar.dtu.dk/agent
 * ssh gbar1 for terminal
 
+* Husk at moduler allerede liggere i .env
 * Moduler: https://www.hpc.dtu.dk/?page_id=282
     - python3/3.10.7
     - cuda/11.7
+
+* pip install med:
+    - python3 -m pip install --user ...
 
 * GPU Nodes: https://www.hpc.dtu.dk/?page_id=2129
     - a100sh virker i hvert fald
