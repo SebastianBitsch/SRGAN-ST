@@ -13,6 +13,7 @@
 # ==============================================================================
 import os
 import time
+import argparse
 from typing import Union
 
 import torch
@@ -469,4 +470,15 @@ def validate(
 
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser(
+                    prog = 'SRGAN-ST',
+                    description = 'Does super resolution',
+                    epilog = 'Text at the bottom of help bla bla')
+    parser.add_argument('exp_name', type=str, help='The name of the experiment', default="SRGAN_x4-DIV2K")
+    
+    args = parser.parse_args()
+
+    srgan_config.exp_name = args.exp_name
+
     main()
+
