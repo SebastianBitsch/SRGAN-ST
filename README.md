@@ -17,6 +17,8 @@
 * GPU Nodes: https://www.hpc.dtu.dk/?page_id=2129
     - a100sh virker i hvert fald
 
+* Launch tensorboard fra ssh i vsc:
+    - tensorboard --logir=samples/logs/ --host localhost --port 8888
 
 
 
