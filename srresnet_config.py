@@ -34,6 +34,8 @@ in_channels = 3
 out_channels = 3
 channels = 64
 num_rcb = 16
+num_blocks = num_rcb
+
 # Test upscale factor
 upscale_factor = 4
 # Current configuration parameter method
