@@ -54,7 +54,7 @@ def _calculate_weights_indices(in_length: int,
                                out_length: int,
                                scale: float,
                                kernel_width: int,
-                               antialiasing: bool) -> [np.ndarray, np.ndarray, int, int]:
+                               antialiasing: bool) -> tuple[np.ndarray, np.ndarray, int, int]:
     """Implementation of `calculate_weights_indices` function in Matlab under Python language.
 
     Args:
@@ -238,7 +238,7 @@ def image_resize(image: Any, scale_factor: float, antialiasing: bool = True) -> 
     # symmetric copying
     img_aug = torch.FloatTensor(in_c, in_h + sym_len_hs + sym_len_he, in_w)
     img_aug.narrow(1, sym_len_hs, in_h).copy_(image)
-
+    
     sym_patch = image[:, :sym_len_hs, :]
     inv_idx = torch.arange(sym_patch.size(1) - 1, -1, -1).long()
     sym_patch_inv = sym_patch.index_select(1, inv_idx)

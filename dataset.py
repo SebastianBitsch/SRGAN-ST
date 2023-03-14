@@ -54,7 +54,7 @@ class TrainValidImageDataset(Dataset):
         self.upscale_factor = upscale_factor
         self.mode = mode
 
-    def __getitem__(self, batch_index: int) -> [dict[str, Tensor], dict[str, Tensor]]:
+    def __getitem__(self, batch_index: int) -> dict[str, Tensor]:
         # Read a batch of image data
         gt_image = cv2.imread(self.image_file_names[batch_index]).astype(np.float32) / 255.
 
@@ -97,7 +97,7 @@ class TestImageDataset(Dataset):
         self.gt_image_file_names = [os.path.join(test_gt_images_dir, x) for x in os.listdir(test_gt_images_dir) if not x.startswith('.')]
         self.lr_image_file_names = [os.path.join(test_lr_images_dir, x) for x in os.listdir(test_lr_images_dir) if not x.startswith('.')]
 
-    def __getitem__(self, batch_index: int) -> [torch.Tensor, torch.Tensor]:
+    def __getitem__(self, batch_index: int) -> dict[str, torch.Tensor]:
         # Read a batch of image data
         gt_image = cv2.imread(self.gt_image_file_names[batch_index]).astype(np.float32) / 255.
         lr_image = cv2.imread(self.lr_image_file_names[batch_index]).astype(np.float32) / 255.

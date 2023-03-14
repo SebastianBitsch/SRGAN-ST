@@ -7,3 +7,9 @@ femur_01
 __pycache__
 logs
 data/
+results
+samples
+*.err
+*.out
+
+airplane

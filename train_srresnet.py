@@ -128,7 +128,7 @@ def main():
                         is_last)
 
 
-def load_dataset() -> [CUDAPrefetcher, CUDAPrefetcher]:
+def load_dataset() -> tuple[CUDAPrefetcher, CUDAPrefetcher]:
     # Load train, test and valid datasets
     train_datasets = TrainValidImageDataset(srresnet_config.train_gt_images_dir,
                                             srresnet_config.gt_image_size,
@@ -162,7 +162,8 @@ def load_dataset() -> [CUDAPrefetcher, CUDAPrefetcher]:
 def build_model() -> nn.Module:
     srresnet_model = model.__dict__[srresnet_config.g_arch_name](in_channels=srresnet_config.in_channels,
                                                                  out_channels=srresnet_config.out_channels,
-                                                                 channels=srresnet_config.channels) #,num_blocks=srresnet_config.num_blocks
+                                                                 channels=srresnet_config.channels,
+                                                                 num_rcb=srresnet_config.num_rcb) #,num_blocks=srresnet_config.num_blocks
     srresnet_model = srresnet_model.to(device=srresnet_config.device)
 
     return srresnet_model
@@ -265,7 +266,7 @@ def validate(
         psnr_model: nn.Module,
         ssim_model: nn.Module,
         mode: str
-) -> [float, float]:
+) -> tuple[float, float]:
     # Calculate how many batches of data are in each Epoch
     batch_time = AverageMeter("Time", ":6.3f")
     psnres = AverageMeter("PSNR", ":4.2f")
