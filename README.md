@@ -18,7 +18,7 @@
     - a100sh virker i hvert fald
 
 * Launch tensorboard fra ssh i vsc:
-    - tensorboard --logir=samples/logs/ --host localhost --port 8888
+    - tensorboard --logdir=samples/logs/ --host localhost --port 8888
 
 
 
