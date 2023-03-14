@@ -8,8 +8,8 @@
 
 * Husk at moduler allerede liggere i .env
 * Moduler: https://www.hpc.dtu.dk/?page_id=282
-    - python3/3.10.7
-    - cuda/11.7
+    - module load python3/3.10.7
+    - module load cuda/11.7
 
 * pip install med:
     - python3 -m pip install --user ...
@@ -18,7 +18,7 @@
     - a100sh virker i hvert fald
 
 * Launch tensorboard fra ssh i vsc:
-    - tensorboard --logir=samples/logs/ --host localhost --port 8888
+    - tensorboard --logdir=samples/logs/ --host localhost --port 8888
 
 
 
