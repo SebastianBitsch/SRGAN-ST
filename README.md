@@ -20,7 +20,8 @@
 * Launch tensorboard fra ssh i vsc:
     - tensorboard --logdir=samples/logs/ --host localhost --port 8888
 
-
+* Kopier filer til og fra hpc
+    - https://www.gbar.dtu.dk/index.php/faq/78-home-directory
 
 how to use venv in notebooks
 https://anbasile.github.io/posts/2017-06-25-jupyter-venv/
