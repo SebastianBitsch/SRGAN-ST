@@ -45,12 +45,11 @@ source .env/bin/activate
 
 # declare -a 
 # Get the model path
-models_to_test=($(ls /work3/s204163/PW*))
+SOURCE_DIR=/work3/s204163
+models_to_test=("$SOURCE_DIR"/PW*)
 
-echo $models_to_test
-
-model_weights=/work3/s204163/${models_to_test[i]}/g_best.pth.tar
-exp_name=${models_to_test[i]}-TEST
+model_weights=${models_to_test[i]}/g_best.pth.tar
+exp_name=$(basename ${models_to_test[i]})-TEST
 
 python3 test.py -exp_name=$exp_name -g_model_weights_path=$model_weights
 
