@@ -1,6 +1,6 @@
 #!/bin/bash
 ### -- set the job Name -- 
-#BSUB -J Train-SRGAN-ST[5-6]%1
+#BSUB -J Train-SRGAN-ST[1-6]%6
 
 ### -- Specify the output and error file. %J is the job-id --
 ### -- -o and -e mean append, -oo and -eo mean overwrite --
@@ -43,10 +43,14 @@ let i--
 
 source .env/bin/activate
 
+# declare -a 
 # Get the model path
-declare -a models_to_test=("CW2")
-model_weights="/work3/s204163/"${models_to_test[i]}"/g_best.pth.tar"
+models_to_test=($(ls /work3/s204163/PW*))
+
+echo $models_to_test
+
+model_weights=/work3/s204163/${models_to_test[i]}/g_best.pth.tar
 exp_name=${models_to_test[i]}-TEST
 
-python3 test.py -exp_name=$test -g_model_weights_path=$model_weights
+python3 test.py -exp_name=$exp_name -g_model_weights_path=$model_weights
 

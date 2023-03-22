@@ -1,6 +1,6 @@
 #!/bin/bash
 ### -- set the job Name -- 
-#BSUB -J Train-SRGAN-ST[5-6]%1
+#BSUB -J Train-SRGAN-ST[1-3]%3
 
 ### -- Specify the output and error file. %J is the job-id --
 ### -- -o and -e mean append, -oo and -eo mean overwrite --
@@ -38,16 +38,16 @@ nvidia-smi
 
 # Load the cuda module
 
-now=$(date +"%Y-%m-%d-%H%M")
+now=$(date +"%m-%d-%H")
 
-declare -a exp_names=("PW1" "PW2" "PW3" "PW4" "PW5" "PW6")
+declare -a exp_names=("CW1" "CW2" "CW3" "PW4" "PW5" "PW6")
 
 let i=$LSB_JOBINDEX
 let i--
 
 
-declare -a pixel_weights=(    0.0   0.01  1.0   10.0  100.0 1000.0)
-declare -a content_weights=(      1.0   1.0   1.0   1.0   1.0   1.0)
+declare -a content_weights=(    0.0   0.01  1.0   10.0  100.0 1000.0)
+declare -a pixel_weights=(      1.0   1.0   1.0   1.0   1.0   1.0)
 declare -a adversarial_weights=(0.001 0.001 0.001 0.001 0.001 0.001)
 
 source .env/bin/activate
@@ -67,4 +67,4 @@ python train_srgan.py -exp_name=$name -pixel_weight=$p_weight -content_weight=$c
 rm -fr samples/$name
 
 # Move the results to scratch
-mv -r /zhome/c9/c/156514/SRGAN-ST/results/$name /zhome/work3/s204163/
+mv /zhome/c9/c/156514/SRGAN-ST/results/$name /work3/s204163/

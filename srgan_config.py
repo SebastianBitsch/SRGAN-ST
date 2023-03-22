@@ -96,6 +96,6 @@ if mode == "test":
     sr_dir = f"./results/test/{exp_name}"
     gt_dir = f"./data/Set5/GTmod12"
 
-    ex = exp_name.split("-")[0]
-    g_model_weights_path = f"./results/{ex}/g_best.pth.tar"#"./samples/SRResNet_x4-ImageNet/g_epoch_30.pth.tar"#"./results/SRGAN_x4-DIV2K/g_best.pth.tar" # f"results/pretrained_models/SRGAN_x4-ImageNet-8c4a7569.pth.tar" #"./results/M1/g_best.pth.tar"#
+    # ex = exp_name.split("-")[0]
+    # g_model_weights_path = f"./results/{ex}/g_best.pth.tar"#"./samples/SRResNet_x4-ImageNet/g_epoch_30.pth.tar"#"./results/SRGAN_x4-DIV2K/g_best.pth.tar" # f"results/pretrained_models/SRGAN_x4-ImageNet-8c4a7569.pth.tar" #"./results/M1/g_best.pth.tar"#
     # g_model_weights_path = "./results/pretrained_models/SRGAN_x4-ImageNet-8c4a7569.pth.tar"

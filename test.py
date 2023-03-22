@@ -114,4 +114,8 @@ if __name__ == "__main__":
     srgan_config.g_model_weights_path = args.g_model_weights_path
     srgan_config.mode = "test"
 
+    srgan_config.lr_dir = f"./data/Set5/LRbicx{srgan_config.upscale_factor}"
+    srgan_config.sr_dir = f"./results/test/{srgan_config.exp_name}"
+    srgan_config.gt_dir = f"./data/Set5/GTmod12"
+
     main()
