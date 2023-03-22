@@ -23,6 +23,7 @@
 
 * Find ud hvor meget space er brugt på hpc
     - ```getquota_zhome.sh```
+    - ```getquota_work3.sh```
     - ```du -h --max-depth=1 --apparent $HOME```
 
 * how to use venv in notebooks [link](https://anbasile.github.io/posts/2017-06-25-jupyter-venv/)
