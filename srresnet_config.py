@@ -41,7 +41,7 @@ upscale_factor = 4
 # Current configuration parameter method
 mode = "train"
 # Experiment name, easy to save weights and log files
-exp_name = "SRResNet_x4-ImageNet"
+exp_name = "SRResNet_x4-ImageNet_2"
 
 save_checkpoints = True
 

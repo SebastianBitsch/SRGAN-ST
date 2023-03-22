@@ -38,9 +38,9 @@ num_rcb = 16
 # Test upscale factor
 upscale_factor = 4
 # Current configuration parameter method
-mode = "test"
+mode = "train"
 # Experiment name, easy to save weights and log files
-exp_name = "M1-TEST"#"SRGAN_x4-DIV2K"
+exp_name = "SRGAN-CW"#"SRGAN_x4-DIV2K"
 
 save_checkpoints = True
 
@@ -57,16 +57,16 @@ if mode == "train":
 
     # The address to load the pretrained model
     pretrained_d_model_weights_path = f""
-    pretrained_g_model_weights_path = f"./results/SRResNet_x4-DIV2K/g_last.pth.tar"
+    pretrained_g_model_weights_path = "./samples/SRResNet_x4-ImageNet/g_epoch_30.pth.tar"#f"./results/SRResNet_x4-DIV2K/g_last.pth.tar"
 
     # Incremental training and migration training
     resume_d_model_weights_path = f""
     resume_g_model_weights_path = f""
 
     # Total num epochs (200,000 iters)
-    epochs = 18
+    epochs = 15
 
-    # Loss function weight
+    # Loss function weight - overwritten in .sh file
     pixel_weight = 1.0
     content_weight = 1.0
     adversarial_weight = 0.001
@@ -96,5 +96,6 @@ if mode == "test":
     sr_dir = f"./results/test/{exp_name}"
     gt_dir = f"./data/Set5/GTmod12"
 
-    g_model_weights_path ="./results/M1/g_best.pth.tar"#"./results/SRGAN_x4-DIV2K/g_best.pth.tar" # f"results/pretrained_models/SRGAN_x4-ImageNet-8c4a7569.pth.tar"
+    ex = exp_name.split("-")[0]
+    g_model_weights_path = f"./results/{ex}/g_best.pth.tar"#"./samples/SRResNet_x4-ImageNet/g_epoch_30.pth.tar"#"./results/SRGAN_x4-DIV2K/g_best.pth.tar" # f"results/pretrained_models/SRGAN_x4-ImageNet-8c4a7569.pth.tar" #"./results/M1/g_best.pth.tar"#
     # g_model_weights_path = "./results/pretrained_models/SRGAN_x4-ImageNet-8c4a7569.pth.tar"

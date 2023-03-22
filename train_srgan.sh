@@ -1,6 +1,6 @@
 #!/bin/bash
 ### -- set the job Name -- 
-#BSUB -J Train-SRGAN-ST[1-6]%6
+#BSUB -J Train-SRGAN-ST[1-6]%1
 
 ### -- Specify the output and error file. %J is the job-id --
 ### -- -o and -e mean append, -oo and -eo mean overwrite --
@@ -40,22 +40,25 @@ nvidia-smi
 
 now=$(date +"%Y-%m-%d-%H:%M")
 
-exp_names=("Dummy" "P1_C0_A0_001" "P0_C1_A0_001" "P1_C1_A0_001" "P0_5_C0_5_A0_001" "P1_C0_5_A0_001" "P0_5_C1_A0_001")
+declare -a exp_names=("CW1" "CW2" "CW3" "CW4" "CW5" "CW6")
 
-pixel_weights=(0.0 1.0 0.0 1.0 0.5 1.0 0.5)
-content_weights=(0.0 0.0 1.0 1.0 0.5 0.5 1.0)
-adversarial_weights=(0.0 0.001 0.001 0.001 0.001 0.001 0.001)
+let i=$LSB_JOBINDEX
+let i--
+
+declare -a pixel_weights=(      1.0   1.0   1.0   1.0   1.0   1.0)
+declare -a content_weights=(    0.0   0.01  1.0   10.0  100.0 1000.0)
+declare -a adversarial_weights=(0.001 0.001 0.001 0.001 0.001 0.001)
 
 source .env/bin/activate
 
 # module load python3/3.10.7
 # module load cuda/11.7
 
-name="${exp_names[${LSB_JOBINDEX}]}-$now"
+name=${exp_names[$i]}-$now
 
-p_weight="${pixel_weights[${LSB_JOBINDEX}]}"
-c_weight="${content_weights[${LSB_JOBINDEX}]}"
-a_weight="${adversarial_weights[${LSB_JOBINDEX}]}"
+p_weight=${pixel_weights[$i]}
+c_weight=${content_weights[$i]}
+a_weight=${adversarial_weights[$i]}
 
 python train_srgan.py -exp_name=$name -pixel_weight=$p_weight -content_weight=$c_weight -adversarial_weight=$a_weight
 
