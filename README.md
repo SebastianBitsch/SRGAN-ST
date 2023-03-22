@@ -29,3 +29,15 @@
 * how to use venv in notebooks [link](https://anbasile.github.io/posts/2017-06-25-jupyter-venv/)
 * Kopier filer fra hpc til pc
     - ```scp -r -i /Users/sebastianbitsch/.ssh/gbar s204163@transfer.gbar.dtu.dk:SRGAN-ST/samples/logs /Users/sebastianbitsch/Desktop/```
+
+
+## Sources
+https://www.hpc.dtu.dk/?page_id=4061
+@misc{DTU_DCC_resource,
+    author    = {{DTU Computing Center}},
+    title     = {{DTU Computing Center resources}},
+    year      = {2022},
+    publisher = {Technical University of Denmark},
+    doi       = {10.48714/DTU.HPC.0001},
+    url       = {https://doi.org/10.48714/DTU.HPC.0001},
+}
