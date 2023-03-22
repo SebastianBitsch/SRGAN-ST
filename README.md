@@ -26,3 +26,5 @@
     - ```du -h --max-depth=1 --apparent $HOME```
 
 * how to use venv in notebooks [link](https://anbasile.github.io/posts/2017-06-25-jupyter-venv/)
+* Kopier filer fra hpc til pc
+    - ```scp -r -i /Users/sebastianbitsch/.ssh/gbar s204163@transfer.gbar.dtu.dk:SRGAN-ST/samples/logs /Users/sebastianbitsch/Desktop/```
