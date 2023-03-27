@@ -1,6 +1,6 @@
 #!/bin/bash
 ### -- set the job Name -- 
-#BSUB -J Train-SRGAN-ST[1-3]%3
+#BSUB -J Train-SRGAN-ST[1-6]%6
 
 ### -- Specify the output and error file. %J is the job-id --
 ### -- -o and -e mean append, -oo and -eo mean overwrite --
@@ -40,14 +40,14 @@ nvidia-smi
 
 now=$(date +"%m-%d-%H")
 
-declare -a exp_names=("CW1" "CW2" "CW3" "PW4" "PW5" "PW6")
+declare -a exp_names=("PW1" "PW2" "PW3" "PW4" "PW5" "PW6")
 
 let i=$LSB_JOBINDEX
 let i--
 
 
-declare -a content_weights=(    0.0   0.01  1.0   10.0  100.0 1000.0)
-declare -a pixel_weights=(      1.0   1.0   1.0   1.0   1.0   1.0)
+declare -a pixel_weights=(    0.0   0.01  1.0   10.0  100.0 1000.0)
+declare -a content_weights=(      1.0   1.0   1.0   1.0   1.0   1.0)
 declare -a adversarial_weights=(0.001 0.001 0.001 0.001 0.001 0.001)
 
 source .env/bin/activate

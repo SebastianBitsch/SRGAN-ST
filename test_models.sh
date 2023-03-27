@@ -1,11 +1,11 @@
 #!/bin/bash
 ### -- set the job Name -- 
-#BSUB -J Train-SRGAN-ST[1-6]%6
+#BSUB -J Test-SRGAN-ST[1-6]%6
 
 ### -- Specify the output and error file. %J is the job-id --
 ### -- -o and -e mean append, -oo and -eo mean overwrite --
-#BSUB -o train_srganst_%J.out
-#BSUB -e train_srganst_%J.err
+#BSUB -o test_srganst_%J.out
+#BSUB -e test_srganst_%J.err
 # -- end of LSF options --
 
 ### -- specify queue -- 
@@ -43,13 +43,15 @@ let i--
 
 source .env/bin/activate
 
-# declare -a 
+
 # Get the model path
 SOURCE_DIR=/work3/s204163
 models_to_test=("$SOURCE_DIR"/PW*)
 
+# Get the weights
 model_weights=${models_to_test[i]}/g_best.pth.tar
 exp_name=$(basename ${models_to_test[i]})-TEST
 
+# Test file using python
 python3 test.py -exp_name=$exp_name -g_model_weights_path=$model_weights
 
