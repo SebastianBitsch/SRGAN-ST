@@ -12,6 +12,10 @@
 # limitations under the License.
 # ==============================================================================
 import random
+from torch import nn
+
+from loss import EuclidLoss
+from model import ContentLoss
 
 import numpy as np
 import torch
@@ -40,7 +44,27 @@ upscale_factor = 4
 # Current configuration parameter method
 mode = "train"
 # Experiment name, easy to save weights and log files
-exp_name = "SRGAN-CW"#"SRGAN_x4-DIV2K"
+exp_name = "SRGAN-TESTAFLOSS"#"SRGAN_x4-DIV2K"
+
+
+# Feature extraction layer parameter configuration
+feature_model_extractor_node = "features.35"
+feature_model_normalize_mean = [0.485, 0.456, 0.406]
+feature_model_normalize_std = [0.229, 0.224, 0.225]
+
+g_losses = {
+    "AdversarialLoss": nn.BCEWithLogitsLoss(),
+    "PixelLoss": nn.MSELoss(),
+    # "EuclidLoss" : EuclidLoss(),
+    "ContentLoss" : ContentLoss(feature_model_extractor_node, feature_model_normalize_mean, feature_model_normalize_std)
+}
+
+loss_weights = {
+    "AdversarialLoss": 0.001,
+    "PixelLoss": 1.0,
+    # "EuclidLoss" : 1.0,
+    "ContentLoss" : 1.0
+}
 
 save_checkpoints = True
 
@@ -67,14 +91,9 @@ if mode == "train":
     epochs = 15
 
     # Loss function weight - overwritten in .sh file
-    pixel_weight = 1.0
-    content_weight = 1.0
-    adversarial_weight = 0.001
-
-    # Feature extraction layer parameter configuration
-    feature_model_extractor_node = "features.35"
-    feature_model_normalize_mean = [0.485, 0.456, 0.406]
-    feature_model_normalize_std = [0.229, 0.224, 0.225]
+    # pixel_weight = 1.0
+    # content_weight = 1.0
+    # adversarial_weight = 0.001
 
     # Optimizer parameter
     model_lr = 1e-4

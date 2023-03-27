@@ -184,7 +184,7 @@ class _UpsampleBlock(nn.Module):
         return out
 
 
-class _ContentLoss(nn.Module):
+class ContentLoss(nn.Module):
     """Constructs a content loss function based on the VGG19 network.
     Using high-level feature mapping layers from the latter layers will focus more on the texture content of the image.
 
@@ -201,7 +201,7 @@ class _ContentLoss(nn.Module):
             feature_model_normalize_mean: list,
             feature_model_normalize_std: list
     ) -> None:
-        super(_ContentLoss, self).__init__()
+        super(ContentLoss, self).__init__()
         # Get the name of the specified feature extraction node
         self.feature_model_extractor_node = feature_model_extractor_node
         # Load the VGG19 model trained on the ImageNet dataset.
@@ -245,7 +245,7 @@ def discriminator() -> Discriminator:
     return model
 
 
-def content_loss(**kwargs: Any) -> _ContentLoss:
-    content_loss = _ContentLoss(**kwargs)
+def content_loss(**kwargs: Any) -> ContentLoss:
+    content_loss = ContentLoss(**kwargs)
 
     return content_loss

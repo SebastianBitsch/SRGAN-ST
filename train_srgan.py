@@ -13,6 +13,7 @@
 # ==============================================================================
 import os
 import time
+import numpy as np
 
 import torch
 from torch import nn
@@ -23,10 +24,12 @@ from torch.utils.tensorboard import SummaryWriter
 import argparse
 
 import model
-import srgan_config
+
 from dataset import CUDAPrefetcher, TrainValidImageDataset, TestImageDataset
 from image_quality_assessment import PSNR, SSIM
 from utils import load_state_dict, make_directory, save_checkpoint, AverageMeter, ProgressMeter
+
+import srgan_config
 
 model_names = sorted(
     name for name in model.__dict__ if
@@ -47,7 +50,8 @@ def main():
     d_model, g_model = build_model()
     print(f"Build `{srgan_config.g_arch_name}` model successfully.")
 
-    pixel_criterion, content_criterion, adversarial_criterion = define_loss()
+    # pixel_criterion, content_criterion, adversarial_criterion = define_loss()
+    g_losses = define_loss()
     print("Define all loss functions successfully.")
 
     d_optimizer, g_optimizer = define_optimizer(d_model, g_model)
@@ -112,23 +116,28 @@ def main():
     ssim_model = ssim_model.to(device=srgan_config.device)
 
     for epoch in range(start_epoch, srgan_config.epochs):
-        train(d_model,
-              g_model,
-              train_prefetcher,
-              pixel_criterion,
-              content_criterion,
-              adversarial_criterion,
-              d_optimizer,
-              g_optimizer,
-              epoch,
-              writer)
-        psnr, ssim = validate(g_model,
-                              test_prefetcher,
-                              epoch,
-                              writer,
-                              psnr_model,
-                              ssim_model,
-                              "Test")
+        train(
+            d_model,
+            g_model,
+            train_prefetcher,
+            # pixel_criterion,
+            # content_criterion,
+            # adversarial_criterion,
+            g_losses,
+            d_optimizer,
+            g_optimizer,
+            epoch,
+            writer
+        )
+        psnr, ssim = validate(
+            g_model,
+            test_prefetcher,
+            epoch,
+            writer,
+            psnr_model,
+            ssim_model,
+            "Test"
+        )
         print("\n")
 
         # Update LR
@@ -214,18 +223,22 @@ def build_model() -> tuple[nn.Module, nn.Module, nn.Module]:
 
 
 def define_loss() -> tuple[nn.MSELoss, model.content_loss, nn.BCEWithLogitsLoss]:
-    pixel_criterion = nn.MSELoss()
-    content_criterion = model.content_loss(feature_model_extractor_node=srgan_config.feature_model_extractor_node,
-                                           feature_model_normalize_mean=srgan_config.feature_model_normalize_mean,
-                                           feature_model_normalize_std=srgan_config.feature_model_normalize_std)
-    adversarial_criterion = nn.BCEWithLogitsLoss()
+    # pixel_criterion = nn.MSELoss()
+    # content_criterion = model.content_loss(feature_model_extractor_node=srgan_config.feature_model_extractor_node,
+    #                                        feature_model_normalize_mean=srgan_config.feature_model_normalize_mean,
+    #                                        feature_model_normalize_std=srgan_config.feature_model_normalize_std)
+    # adversarial_criterion = nn.BCEWithLogitsLoss()
 
-    # Transfer to CUDA
-    pixel_criterion = pixel_criterion.to(device=srgan_config.device)
-    content_criterion = content_criterion.to(device=srgan_config.device)
-    adversarial_criterion = adversarial_criterion.to(device=srgan_config.device)
+    # # Transfer to CUDA
+    # pixel_criterion = pixel_criterion.to(device=srgan_config.device)
+    # content_criterion = content_criterion.to(device=srgan_config.device)
+    # adversarial_criterion = adversarial_criterion.to(device=srgan_config.device)
 
-    return pixel_criterion, content_criterion, adversarial_criterion
+    # return pixel_criterion, content_criterion, adversarial_criterion
+    for name, loss in srgan_config.g_losses.items():
+        srgan_config.g_losses[name] = loss.to(device=srgan_config.device)
+
+    return srgan_config.g_losses
 
 
 def define_optimizer(d_model, g_model) -> tuple[optim.Adam, optim.Adam]:
@@ -260,9 +273,10 @@ def train(
         d_model: nn.Module,
         g_model: nn.Module,
         train_prefetcher: CUDAPrefetcher,
-        pixel_criterion: nn.MSELoss,
-        content_criterion: model.content_loss,
-        adversarial_criterion: nn.BCEWithLogitsLoss,
+        # pixel_criterion: nn.MSELoss,
+        # content_criterion: model.content_loss,
+        # adversarial_criterion: nn.BCEWithLogitsLoss,
+        loss_fns,
         d_optimizer: optim.Adam,
         g_optimizer: optim.Adam,
         epoch: int,
@@ -273,16 +287,23 @@ def train(
     # Print information of progress bar during training
     batch_time = AverageMeter("Time", ":6.3f")
     data_time = AverageMeter("Data", ":6.3f")
-    pixel_losses = AverageMeter("Pixel loss", ":6.6f")
-    content_losses = AverageMeter("Content loss", ":6.6f")
-    adversarial_losses = AverageMeter("Adversarial loss", ":6.6f")
+    
+    # pixel_losses = AverageMeter("Pixel loss", ":6.6f")
+    # content_losses = AverageMeter("Content loss", ":6.6f")
+    # adversarial_losses = AverageMeter("Adversarial loss", ":6.6f")
+    loss_meters = [AverageMeter(name, ":6.6f") for name, _ in loss_fns.items()]
     d_gt_probabilities = AverageMeter("D(GT)", ":6.3f")
     d_sr_probabilities = AverageMeter("D(SR)", ":6.3f")
-    progress = ProgressMeter(batches,
-                             [batch_time, data_time,
-                              pixel_losses, content_losses, adversarial_losses,
-                              d_gt_probabilities, d_sr_probabilities],
-                             prefix=f"Epoch: [{epoch + 1}]")
+    # progress = ProgressMeter(batches,
+    #                          [batch_time, data_time,
+    #                           pixel_losses, content_losses, adversarial_losses,
+    #                           d_gt_probabilities, d_sr_probabilities],
+    #                          prefix=f"Epoch: [{epoch + 1}]")
+    progress = ProgressMeter(
+        num_batches = batches,
+        meters = [batch_time, data_time] + loss_meters + [d_gt_probabilities, d_sr_probabilities],
+        prefix = f"Epoch: [{epoch + 1}]"
+    )
 
     # Put the adversarial network model in training mode
     d_model.train()
@@ -321,7 +342,8 @@ def train(
 
         # Calculate the classification score of the discriminator model for real samples
         gt_output = d_model(gt)
-        d_loss_gt = adversarial_criterion(gt_output, real_label)
+        # d_loss_gt = adversarial_criterion(gt_output, real_label)
+        d_loss_gt = loss_fns['AdversarialLoss'](gt_output, real_label)
         # Call the gradient scaling function in the mixed precision API to
         # back-propagate the gradient information of the fake samples
         d_loss_gt.backward(retain_graph=True)
@@ -330,7 +352,8 @@ def train(
         # Use the generator model to generate fake samples
         sr = g_model(lr)
         sr_output = d_model(sr.detach().clone())
-        d_loss_sr = adversarial_criterion(sr_output, fake_label)
+        # d_loss_sr = adversarial_criterion(sr_output, fake_label)
+        d_loss_sr = loss_fns['AdversarialLoss'](sr_output, fake_label)
         # Call the gradient scaling function in the mixed precision API to
         # back-propagate the gradient information of the fake samples
         d_loss_sr.backward()
@@ -351,11 +374,23 @@ def train(
         g_model.zero_grad(set_to_none=True)
 
         # Calculate the perceptual loss of the generator, mainly including pixel loss, feature loss and adversarial loss
-        pixel_loss = srgan_config.pixel_weight * pixel_criterion(sr, gt)
-        content_loss = srgan_config.content_weight * content_criterion(sr, gt)
-        adversarial_loss = srgan_config.adversarial_weight * adversarial_criterion(d_model(sr), real_label)
+        loss_vals = [srgan_config.loss_weights['AdversarialLoss'] * loss_fns['AdversarialLoss'](d_model(sr), real_label)]
+        loss_vals += [srgan_config.loss_weights[name] * loss_fn(sr, gt) for name, loss_fn in loss_fns.items() if name != "AdversarialLoss"]
+        
+        # g_loss = torch.sum(torch.tensor(loss_vals, requires_grad=True))
+        # l1 = srgan_config.loss_weights['AdversarialLoss'] * (loss_fns['AdversarialLoss'](d_model(sr), real_label))
+        # l2 = srgan_config.loss_weights['PixelLoss'] * (loss_fns['PixelLoss'](sr, gt))
+        # l3 = srgan_config.loss_weights['ContentLoss'] * (loss_fns['ContentLoss'](sr, gt))
+        loss_vals = torch.tensor(loss_vals, requires_grad=True)
+        
+        # g_loss = torch.sum()
+        # g_loss = l1 + l2 + l3
+        g_loss = loss_vals.sum()
+        # pixel_loss = srgan_config.pixel_weight * pixel_criterion(sr, gt)
+        # content_loss = srgan_config.content_weight * content_criterion(sr, gt)
+        # adversarial_loss = srgan_config.adversarial_weight * adversarial_criterion(d_model(sr), real_label)
         # Calculate the generator total loss value
-        g_loss = pixel_loss + content_loss + adversarial_loss
+        # g_loss = pixel_loss + content_loss + adversarial_loss
         # Call the gradient scaling function in the mixed precision API to
         # back-propagate the gradient information of the fake samples
         g_loss.backward()
@@ -370,9 +405,12 @@ def train(
         d_sr_probability = torch.sigmoid_(torch.mean(sr_output.detach()))
 
         # Statistical accuracy and loss value for terminal data output
-        pixel_losses.update(pixel_loss.item(), lr.size(0))
-        content_losses.update(content_loss.item(), lr.size(0))
-        adversarial_losses.update(adversarial_loss.item(), lr.size(0))
+        for meter, loss_val in zip(loss_meters, loss_vals):
+            meter.update(loss_val.item(), lr.size(0))
+
+        # pixel_losses.update(pixel_loss.item(), lr.size(0))
+        # content_losses.update(content_loss.item(), lr.size(0))
+        # adversarial_losses.update(adversarial_loss.item(), lr.size(0))
         d_gt_probabilities.update(d_gt_probability.item(), lr.size(0))
         d_sr_probabilities.update(d_sr_probability.item(), lr.size(0))
 
@@ -385,9 +423,12 @@ def train(
             iters = batch_index + epoch * batches + 1
             writer.add_scalar("Train/D_Loss", d_loss.item(), iters)
             writer.add_scalar("Train/G_Loss", g_loss.item(), iters)
-            writer.add_scalar("Train/Pixel_Loss", pixel_loss.item(), iters)
-            writer.add_scalar("Train/Content_Loss", content_loss.item(), iters)
-            writer.add_scalar("Train/Adversarial_Loss", adversarial_loss.item(), iters)
+            
+            for (name, _), loss_val in zip(loss_fns.items(), loss_vals):
+                writer.add_scalar(f"Train/{name}", loss_val.item(), iters)
+            # writer.add_scalar("Train/Pixel_Loss", pixel_loss.item(), iters)
+            # writer.add_scalar("Train/Content_Loss", content_loss.item(), iters)
+            # writer.add_scalar("Train/Adversarial_Loss", adversarial_loss.item(), iters)
             writer.add_scalar("Train/D(GT)_Probability", d_gt_probability.item(), iters)
             writer.add_scalar("Train/D(SR)_Probability", d_sr_probability.item(), iters)
             progress.display(batch_index + 1)
@@ -482,9 +523,9 @@ if __name__ == "__main__":
     
     args = parser.parse_args()
 
-    srgan_config.exp_name = args.exp_name
-    srgan_config.pixel_weight = args.pixel_weight
-    srgan_config.content_weight = args.content_weight
-    srgan_config.adversarial_weight = args.adversarial_weight
+    # srgan_config.exp_name = args.exp_name
+    # srgan_config.pixel_weight = args.pixel_weight
+    # srgan_config.content_weight = args.content_weight
+    # srgan_config.adversarial_weight = args.adversarial_weight
 
     main()
