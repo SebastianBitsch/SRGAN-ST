@@ -12,5 +12,5 @@ samples
 *.err
 *.out
 .DS_Store
-
+.png
 airplane
