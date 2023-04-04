@@ -523,7 +523,7 @@ if __name__ == "__main__":
     
     args = parser.parse_args()
 
-    # srgan_config.exp_name = args.exp_name
+    srgan_config.exp_name = args.exp_name
     # srgan_config.pixel_weight = args.pixel_weight
     # srgan_config.content_weight = args.content_weight
     # srgan_config.adversarial_weight = args.adversarial_weight

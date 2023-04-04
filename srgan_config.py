@@ -55,15 +55,15 @@ feature_model_normalize_std = [0.229, 0.224, 0.225]
 g_losses = {
     "AdversarialLoss": nn.BCEWithLogitsLoss(),
     "PixelLoss": nn.MSELoss(),
-    # "EuclidLoss" : EuclidLoss(),
-    "ContentLoss" : ContentLoss(feature_model_extractor_node, feature_model_normalize_mean, feature_model_normalize_std)
+    "EuclidLoss" : EuclidLoss()#,
+    # "ContentLoss" : ContentLoss(feature_model_extractor_node, feature_model_normalize_mean, feature_model_normalize_std)
 }
 
 loss_weights = {
     "AdversarialLoss": 0.001,
     "PixelLoss": 1.0,
-    # "EuclidLoss" : 1.0,
-    "ContentLoss" : 1.0
+    "EuclidLoss" : 1.0#,
+    # "ContentLoss" : 1.0
 }
 
 save_checkpoints = True

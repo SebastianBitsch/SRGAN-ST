@@ -1,7 +1,5 @@
 from torch import nn, Tensor, flatten
 
-from torch import cdist
-
 class EuclidLoss(nn.Module):
     """"""
 
