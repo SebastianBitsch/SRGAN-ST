@@ -7,3 +7,4 @@ femur_01
 __pycache__
 SRGAN/data
 logs
+data/
