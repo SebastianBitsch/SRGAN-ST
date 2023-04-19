@@ -97,9 +97,9 @@ if mode == "train":
     epochs = 15
 
     # Loss function weight - overwritten in .sh file
-    # pixel_weight = 1.0
-    # content_weight = 1.0
-    # adversarial_weight = 0.001
+    pixel_weight = 1.0
+    content_weight = 1.0
+    adversarial_weight = 0.001
 
     # Optimizer parameter
     model_lr = 1e-4

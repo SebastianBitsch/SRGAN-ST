@@ -51,7 +51,9 @@ def main():
     print(f"Build `{srgan_config.g_arch_name}` model successfully.")
 
     # pixel_criterion, content_criterion, adversarial_criterion = define_loss()
-    g_losses = define_loss()
+    for name, loss in srgan_config.g_losses.items():
+        srgan_config.g_losses[name] = loss.to(device=srgan_config.device)
+
     print("Define all loss functions successfully.")
 
     d_optimizer, g_optimizer = define_optimizer(d_model, g_model)
@@ -123,7 +125,7 @@ def main():
             # pixel_criterion,
             # content_criterion,
             # adversarial_criterion,
-            g_losses,
+            srgan_config.g_losses,
             d_optimizer,
             g_optimizer,
             epoch,
@@ -223,22 +225,22 @@ def build_model() -> tuple[nn.Module, nn.Module, nn.Module]:
 
 
 def define_loss() -> tuple[nn.MSELoss, model.content_loss, nn.BCEWithLogitsLoss]:
-    # pixel_criterion = nn.MSELoss()
-    # content_criterion = model.content_loss(feature_model_extractor_node=srgan_config.feature_model_extractor_node,
-    #                                        feature_model_normalize_mean=srgan_config.feature_model_normalize_mean,
-    #                                        feature_model_normalize_std=srgan_config.feature_model_normalize_std)
-    # adversarial_criterion = nn.BCEWithLogitsLoss()
+    pixel_criterion = nn.MSELoss()
+    content_criterion = model.content_loss(feature_model_extractor_node=srgan_config.feature_model_extractor_node,
+                                           feature_model_normalize_mean=srgan_config.feature_model_normalize_mean,
+                                           feature_model_normalize_std=srgan_config.feature_model_normalize_std)
+    adversarial_criterion = nn.BCEWithLogitsLoss()
 
-    # # Transfer to CUDA
-    # pixel_criterion = pixel_criterion.to(device=srgan_config.device)
-    # content_criterion = content_criterion.to(device=srgan_config.device)
-    # adversarial_criterion = adversarial_criterion.to(device=srgan_config.device)
+    # Transfer to CUDA
+    pixel_criterion = pixel_criterion.to(device=srgan_config.device)
+    content_criterion = content_criterion.to(device=srgan_config.device)
+    adversarial_criterion = adversarial_criterion.to(device=srgan_config.device)
 
-    # return pixel_criterion, content_criterion, adversarial_criterion
-    for name, loss in srgan_config.g_losses.items():
-        srgan_config.g_losses[name] = loss.to(device=srgan_config.device)
+    return pixel_criterion, content_criterion, adversarial_criterion
+    # for name, loss in srgan_config.g_losses.items():
+    #     srgan_config.g_losses[name] = loss.to(device=srgan_config.device)
 
-    return srgan_config.g_losses
+    # return srgan_config.g_losses
 
 
 def define_optimizer(d_model, g_model) -> tuple[optim.Adam, optim.Adam]:
@@ -343,7 +345,10 @@ def train(
         # Calculate the classification score of the discriminator model for real samples
         gt_output = d_model(gt)
         # d_loss_gt = adversarial_criterion(gt_output, real_label)
+        # d_loss_gt = loss_fns['AdversarialLoss'](gt_output, real_label)
         d_loss_gt = loss_fns['AdversarialLoss'](gt_output, real_label)
+        # print("d_loss_gt", d_loss_gt.requires_grad, d_loss_gt1.requires_grad)
+        
         # Call the gradient scaling function in the mixed precision API to
         # back-propagate the gradient information of the fake samples
         d_loss_gt.backward(retain_graph=True)
@@ -353,7 +358,9 @@ def train(
         sr = g_model(lr)
         sr_output = d_model(sr.detach().clone())
         # d_loss_sr = adversarial_criterion(sr_output, fake_label)
+        # d_loss_sr = loss_fns['AdversarialLoss'](sr_output, fake_label)
         d_loss_sr = loss_fns['AdversarialLoss'](sr_output, fake_label)
+        # assert d_loss_sr == d_loss_sr1
         # Call the gradient scaling function in the mixed precision API to
         # back-propagate the gradient information of the fake samples
         d_loss_sr.backward()
@@ -372,20 +379,34 @@ def train(
 
         # Initialize generator model gradients
         g_model.zero_grad(set_to_none=True)
-
+        # print("BAJSKDBNKJASND")
+        # print(srgan_config.loss_weights['AdversarialLoss'])
+        # print(loss_fns['AdversarialLoss'](d_model(sr), real_label))
         # Calculate the perceptual loss of the generator, mainly including pixel loss, feature loss and adversarial loss
-        loss_vals = [srgan_config.loss_weights['AdversarialLoss'] * loss_fns['AdversarialLoss'](d_model(sr), real_label)]
-        loss_vals += [srgan_config.loss_weights[name] * loss_fn(sr, gt) for name, loss_fn in loss_fns.items() if name != "AdversarialLoss"]
+        loss_vals = []
+        g_loss = srgan_config.loss_weights['AdversarialLoss'] * loss_fns['AdversarialLoss'](d_model(sr), real_label)
+        loss_vals.append(g_loss.detach().cpu().numpy())
+        # print(g_loss1)
+        for name, loss_fn in loss_fns.items():
+            if name == "AdversarialLoss":
+                continue
+            val = srgan_config.loss_weights[name] * loss_fn(sr, gt)
+            g_loss += val
+            loss_vals.append(val.detach().cpu().numpy())
         
+        # loss_vals += [srgan_config.loss_weights[name] * loss_fn(sr, gt) for name, loss_fn in loss_fns.items() if name != "AdversarialLoss"]
+        # loss_vals = torch.tensor(loss_vals, requires_grad=True)
+        # g_loss1 = loss_vals.sum()
+
         # g_loss = torch.sum(torch.tensor(loss_vals, requires_grad=True))
         # l1 = srgan_config.loss_weights['AdversarialLoss'] * (loss_fns['AdversarialLoss'](d_model(sr), real_label))
         # l2 = srgan_config.loss_weights['PixelLoss'] * (loss_fns['PixelLoss'](sr, gt))
         # l3 = srgan_config.loss_weights['ContentLoss'] * (loss_fns['ContentLoss'](sr, gt))
-        loss_vals = torch.tensor(loss_vals, requires_grad=True)
+        # loss_vals = torch.tensor(loss_vals, requires_grad=True)
         
         # g_loss = torch.sum()
         # g_loss = l1 + l2 + l3
-        g_loss = loss_vals.sum()
+        # g_loss = loss_vals.sum()
         # pixel_loss = srgan_config.pixel_weight * pixel_criterion(sr, gt)
         # content_loss = srgan_config.content_weight * content_criterion(sr, gt)
         # adversarial_loss = srgan_config.adversarial_weight * adversarial_criterion(d_model(sr), real_label)
@@ -393,6 +414,9 @@ def train(
         # g_loss = pixel_loss + content_loss + adversarial_loss
         # Call the gradient scaling function in the mixed precision API to
         # back-propagate the gradient information of the fake samples
+        # print(g_loss, g_loss1)
+        
+        # g_loss.backward()
         g_loss.backward()
 
         # Encourage the generator to generate higher quality fake samples, making it easier to fool the discriminator

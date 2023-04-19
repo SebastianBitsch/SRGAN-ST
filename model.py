@@ -229,7 +229,7 @@ class ContentLoss(nn.Module):
 
         # Find the feature map difference between the two images
         loss = F_torch.mse_loss(sr_feature, gt_feature)
-
+        
         return loss
 
 
