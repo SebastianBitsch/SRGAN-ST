@@ -14,7 +14,7 @@
 import random
 from torch import nn
 
-from loss import EuclidLoss, PatchWiseTextureLoss
+from loss import EuclidLoss, PatchWiseTextureLoss, BBLoss, GBBLoss
 from model import ContentLoss
 
 import numpy as np
@@ -44,7 +44,7 @@ upscale_factor = 4
 # Current configuration parameter method
 mode = "train"
 # Experiment name, easy to save weights and log files
-exp_name = "SRGAN-TESTAFLOSS"#"SRGAN_x4-DIV2K"
+exp_name = "SRGAN-TEST-GBBLOSS1"#"SRGAN_x4-DIV2K"
 
 
 # Feature extraction layer parameter configuration
@@ -55,7 +55,9 @@ feature_model_normalize_std = [0.229, 0.224, 0.225]
 g_losses = {
     "AdversarialLoss": nn.BCEWithLogitsLoss(),
     "PixelLoss": nn.MSELoss(),
-    "PatchWiseTextureLoss": PatchWiseTextureLoss(device = device)
+    "ContentLoss" : ContentLoss(feature_model_extractor_node, feature_model_normalize_mean, feature_model_normalize_std)#,
+    # "GBBLoss" : GBBLoss()
+    # "PatchWiseTextureLoss": PatchWiseTextureLoss(device = device),
     # "EuclidLoss" : EuclidLoss()#,
     # "ContentLoss" : ContentLoss(feature_model_extractor_node, feature_model_normalize_mean, feature_model_normalize_std)
 }
@@ -63,7 +65,9 @@ g_losses = {
 loss_weights = {
     "AdversarialLoss": 0.001,
     "PixelLoss": 1.0,
-    "PatchWiseTextureLoss": 1.0
+    "ContentLoss" : 1.0#,
+    # "GBBLoss" : 1.0
+    # "PatchWiseTextureLoss": 1.0
     # "EuclidLoss" : 1.0#,
     # "ContentLoss" : 1.0
 }
@@ -83,7 +87,7 @@ if mode == "train":
 
     # The address to load the pretrained model
     pretrained_d_model_weights_path = f""
-    pretrained_g_model_weights_path = "./samples/SRResNet_x4-ImageNet/g_epoch_30.pth.tar"#f"./results/SRResNet_x4-DIV2K/g_last.pth.tar"
+    pretrained_g_model_weights_path = "./samples/SRResNet_x4-ImageNet/g_epoch_10.pth.tar"#f"./results/SRResNet_x4-DIV2K/g_last.pth.tar"
 
     # Incremental training and migration training
     resume_d_model_weights_path = f""
@@ -117,6 +121,4 @@ if mode == "test":
     sr_dir = f"./results/test/{exp_name}"
     gt_dir = f"./data/Set5/GTmod12"
 
-    # ex = exp_name.split("-")[0]
-    # g_model_weights_path = f"./results/{ex}/g_best.pth.tar"#"./samples/SRResNet_x4-ImageNet/g_epoch_30.pth.tar"#"./results/SRGAN_x4-DIV2K/g_best.pth.tar" # f"results/pretrained_models/SRGAN_x4-ImageNet-8c4a7569.pth.tar" #"./results/M1/g_best.pth.tar"#
-    # g_model_weights_path = "./results/pretrained_models/SRGAN_x4-ImageNet-8c4a7569.pth.tar"
+    g_model_weights_path = "results/SRGAN-TEST-GBBLOSS1/g_best.pth.tar" #"./results/pretrained_models/SRGAN_x4-ImageNet-8c4a7569.pth.tar"

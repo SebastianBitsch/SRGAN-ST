@@ -55,3 +55,5 @@ exp_name=$(basename ${models_to_test[i]})-TEST
 # Test file using python
 python3 test.py -exp_name=$exp_name -g_model_weights_path=$model_weights
 
+asdjfb kjasdfnk jasndkjf najksdfn
+samme som i train

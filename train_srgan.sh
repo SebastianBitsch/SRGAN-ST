@@ -68,3 +68,5 @@ rm -fr samples/$name
 
 # Move the results to scratch
 mv /zhome/c9/c/156514/SRGAN-ST/results/$name /work3/s204163/
+
+HUASDKMAL HUSK AT KOMMENTERE UD I TRAIN_SRGAN.py
