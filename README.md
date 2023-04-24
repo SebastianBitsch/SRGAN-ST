@@ -29,7 +29,7 @@
 * how to use venv in notebooks [link](https://anbasile.github.io/posts/2017-06-25-jupyter-venv/)
 * Kopier filer fra hpc til pc
     - ```scp -r -i /Users/sebastianbitsch/.ssh/gbar s204163@transfer.gbar.dtu.dk:SRGAN-ST/samples/logs /Users/sebastianbitsch/Desktop/```
-
+* Scratch ligger på ```/work3/s204163```
 
 ## Sources
 https://www.hpc.dtu.dk/?page_id=4061
