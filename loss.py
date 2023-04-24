@@ -210,7 +210,6 @@ class GBBLoss(BBLoss):
 
     def __init__(self, alpha=1, beta=1, ksize=3, pad=0, stride=3, dist_norm='l2', criterion='l1'):
         self.batched_gram_matrix = torch.vmap(self.gram_matrix)
-
         super().__init__(alpha, beta, ksize, pad, stride, dist_norm, criterion)
 
     def gram_matrix(self, input: Tensor) -> Tensor:
@@ -237,6 +236,10 @@ class GBBLoss(BBLoss):
         p2_4 = F.unfold(gt_4, kernel_size=self.ksize, padding=self.pad, stride=self.stride)
         p2_4 = p2_4.permute(0, 2, 1).contiguous() # [B, H, C]
         p2_cat = torch.cat([p2, p2_2, p2_4], 1)
+        
+        p1 = self.batched_gram_matrix(p1)
+        p2 = self.batched_gram_matrix(p2)
+        p2_cat = self.batched_gram_matrix(p2_cat)
 
         score1 = self.alpha * self.batch_pairwise_distance(p1, p2_cat)
         score = score1 + self.beta * self.batch_pairwise_distance(p2, p2_cat) # [B, H, H]
@@ -248,3 +251,47 @@ class GBBLoss(BBLoss):
         loss = self.criterion(p1, sel_p2)
 
         return loss
+
+
+# class SBBLoss(BBLoss):
+
+#     def __init__(self, alpha=1, beta=1, ksize=3, pad=0, stride=3, dist_norm='l2', criterion='l1'):
+#         self.batched_gram_matrix = torch.vmap(self.gram_matrix)
+
+#         super().__init__(alpha, beta, ksize, pad, stride, dist_norm, criterion)
+
+#     def gram_matrix(self, input: Tensor) -> Tensor:
+#         """ from: https://pytorch.org/tutorials/advanced/neural_style_tutorial.html"""
+#         d, c = input.size()
+#         features = input.view(c, d)
+#         G = torch.mm(features, features.t())
+
+#         return G.div(c * d)
+
+#     def forward(self, x, gt):
+#         p1 = F.unfold(x, kernel_size=self.ksize, padding=self.pad, stride=self.stride)
+#         B, C, H = p1.size()
+#         p1 = p1.permute(0, 2, 1).contiguous() # [B, H, C]
+
+#         p2 = F.unfold(gt, kernel_size=self.ksize, padding=self.pad, stride=self.stride)
+#         p2 = p2.permute(0, 2, 1).contiguous() # [B, H, C]
+
+#         gt_2 = F.interpolate(gt, scale_factor=0.5, mode='bicubic', align_corners = False)
+#         p2_2 = F.unfold(gt_2, kernel_size=self.ksize, padding=self.pad, stride=self.stride)
+#         p2_2 = p2_2.permute(0, 2, 1).contiguous() # [B, H, C]
+
+#         gt_4 = F.interpolate(gt, scale_factor=0.25, mode='bicubic',align_corners = False)
+#         p2_4 = F.unfold(gt_4, kernel_size=self.ksize, padding=self.pad, stride=self.stride)
+#         p2_4 = p2_4.permute(0, 2, 1).contiguous() # [B, H, C]
+#         p2_cat = torch.cat([p2, p2_2, p2_4], 1)
+
+#         score1 = self.alpha * self.batch_pairwise_distance(p1, p2_cat)
+#         score = score1 + self.beta * self.batch_pairwise_distance(p2, p2_cat) # [B, H, H]
+
+#         weight, ind = torch.min(score, dim=2) # [B, H]
+#         index = ind.unsqueeze(-1).expand([-1, -1, C]) # [B, H, C]
+#         sel_p2 = torch.gather(p2_cat, dim=1, index=index) # [B, H, C]
+
+#         loss = self.criterion(p1, sel_p2)
+
+#         return loss

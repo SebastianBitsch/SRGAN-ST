@@ -1,6 +1,6 @@
 #!/bin/bash
 ### -- set the job Name -- 
-#BSUB -J Train-SRGAN-ST[1-6]%6
+#BSUB -J Train-SRGAN-ST[1-4]%4
 
 ### -- Specify the output and error file. %J is the job-id --
 ### -- -o and -e mean append, -oo and -eo mean overwrite --
@@ -40,15 +40,10 @@ nvidia-smi
 
 now=$(date +"%m-%d-%H")
 
-declare -a exp_names=("PW1" "PW2" "PW3" "PW4" "PW5" "PW6")
+declare -a exp_names=("srgan" "bbgan" "gramgan")
 
 let i=$LSB_JOBINDEX
 let i--
-
-
-declare -a pixel_weights=(    0.0   0.01  1.0   10.0  100.0 1000.0)
-declare -a content_weights=(      1.0   1.0   1.0   1.0   1.0   1.0)
-declare -a adversarial_weights=(0.001 0.001 0.001 0.001 0.001 0.001)
 
 source .env/bin/activate
 
@@ -57,16 +52,10 @@ source .env/bin/activate
 
 name=${exp_names[$i]}-$now
 
-p_weight=${pixel_weights[$i]}
-c_weight=${content_weights[$i]}
-a_weight=${adversarial_weights[$i]}
-
-python train_srgan.py -exp_name=$name -pixel_weight=$p_weight -content_weight=$c_weight -adversarial_weight=$a_weight
+python train_srgan.py -exp_name=$name -model_name=$name
 
 # Delete the sample directory afterwards
 rm -fr samples/$name
 
 # Move the results to scratch
 mv /zhome/c9/c/156514/SRGAN-ST/results/$name /work3/s204163/
-
-HUASDKMAL HUSK AT KOMMENTERE UD I TRAIN_SRGAN.py

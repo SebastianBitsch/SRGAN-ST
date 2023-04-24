@@ -42,9 +42,9 @@ num_rcb = 16
 # Test upscale factor
 upscale_factor = 4
 # Current configuration parameter method
-mode = "train"
+mode = "test"
 # Experiment name, easy to save weights and log files
-exp_name = "SRGAN-TEST-GBBLOSS1"#"SRGAN_x4-DIV2K"
+exp_name = "SRGAN-TEST-GBBLOSS"#"SRGAN_x4-DIV2K"
 
 
 # Feature extraction layer parameter configuration
@@ -52,24 +52,41 @@ feature_model_extractor_node = "features.35"
 feature_model_normalize_mean = [0.485, 0.456, 0.406]
 feature_model_normalize_std = [0.229, 0.224, 0.225]
 
-g_losses = {
+srgan_losses = {
     "AdversarialLoss": nn.BCEWithLogitsLoss(),
     "PixelLoss": nn.MSELoss(),
-    "ContentLoss" : ContentLoss(feature_model_extractor_node, feature_model_normalize_mean, feature_model_normalize_std)#,
-    # "GBBLoss" : GBBLoss()
-    # "PatchWiseTextureLoss": PatchWiseTextureLoss(device = device),
-    # "EuclidLoss" : EuclidLoss()#,
-    # "ContentLoss" : ContentLoss(feature_model_extractor_node, feature_model_normalize_mean, feature_model_normalize_std)
+    "ContentLoss" : ContentLoss(feature_model_extractor_node, feature_model_normalize_mean, feature_model_normalize_std)
 }
+
+bbgan_losses = {
+    "AdversarialLoss": nn.BCEWithLogitsLoss(),
+    "PixelLoss": nn.MSELoss(),
+    "ContentLoss" : ContentLoss(feature_model_extractor_node, feature_model_normalize_mean, feature_model_normalize_std),
+    "BBLoss" : BBLoss()
+}
+
+gramgan_losses = {
+    "AdversarialLoss": nn.BCEWithLogitsLoss(),
+    "PixelLoss": nn.MSELoss(),
+    "ContentLoss" : ContentLoss(feature_model_extractor_node, feature_model_normalize_mean, feature_model_normalize_std),
+    "GBBLoss" : GBBLoss()
+}
+
+# stgan_losses = {
+#     "AdversarialLoss": nn.BCEWithLogitsLoss(),
+#     "PixelLoss": nn.MSELoss(),
+#     "ContentLoss" : ContentLoss(feature_model_extractor_node, feature_model_normalize_mean, feature_model_normalize_std),
+#     "BBLoss" : ()
+# }
+
+g_losses = None
 
 loss_weights = {
     "AdversarialLoss": 0.001,
     "PixelLoss": 1.0,
-    "ContentLoss" : 1.0#,
-    # "GBBLoss" : 1.0
-    # "PatchWiseTextureLoss": 1.0
-    # "EuclidLoss" : 1.0#,
-    # "ContentLoss" : 1.0
+    "ContentLoss" : 1.0,
+    "BBLoss" : 1.0,
+    "GBBLoss" : 1.0
 }
 
 save_checkpoints = True
@@ -87,7 +104,7 @@ if mode == "train":
 
     # The address to load the pretrained model
     pretrained_d_model_weights_path = f""
-    pretrained_g_model_weights_path = "./samples/SRResNet_x4-ImageNet/g_epoch_10.pth.tar"#f"./results/SRResNet_x4-DIV2K/g_last.pth.tar"
+    pretrained_g_model_weights_path = "./samples/SRResNet_x4-ImageNet/g_epoch_90.pth.tar"#f"./results/SRResNet_x4-DIV2K/g_last.pth.tar"
 
     # Incremental training and migration training
     resume_d_model_weights_path = f""
@@ -121,4 +138,4 @@ if mode == "test":
     sr_dir = f"./results/test/{exp_name}"
     gt_dir = f"./data/Set5/GTmod12"
 
-    g_model_weights_path = "results/SRGAN-TEST-GBBLOSS1/g_best.pth.tar" #"./results/pretrained_models/SRGAN_x4-ImageNet-8c4a7569.pth.tar"
+    g_model_weights_path = "results/SRGAN-TEST-GBBLOSS/g_best.pth.tar" #"./results/pretrained_models/SRGAN_x4-ImageNet-8c4a7569.pth.tar"
