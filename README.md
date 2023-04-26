@@ -4,6 +4,10 @@
 ## Guide:
 
 * Thinlinc [link](https://th3.gbar.dtu.dk/agent)
+* Check plads
+    - ```getquota_zhome.sh```
+    - ```getquota_work1```
+
 
 * Husk at moduler allerede liggere i .env
 * Moduler: [link](https://www.hpc.dtu.dk/?page_id=282)
