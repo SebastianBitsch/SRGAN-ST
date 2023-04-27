@@ -6,7 +6,7 @@
 * Thinlinc [link](https://th3.gbar.dtu.dk/agent)
 * Check plads
     - ```getquota_zhome.sh```
-    - ```getquota_work1```
+    - ```getquota_work1.sh```
 
 
 * Husk at moduler allerede liggere i .env
