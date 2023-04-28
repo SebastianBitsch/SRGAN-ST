@@ -1,12 +1,74 @@
-from os import listdir
-from random import choices
-from torch import nn, Tensor, linalg
 import torch
+import numpy as np
+
+from torch import nn, Tensor
 
 import torch.nn.functional as F
-from skimage import io, img_as_float
-# from torchvision import io
-import numpy as np
+from torchvision import models
+from torchvision import transforms
+from torchvision.models.feature_extraction import create_feature_extractor
+
+
+class ContentLoss(nn.Module):
+    """Constructs a content loss function based on the VGG19 network.
+    Using high-level feature mapping layers from the latter layers will focus more on the texture content of the image.
+
+    Paper reference list:
+        -`Photo-Realistic Single Image Super-Resolution Using a Generative Adversarial Network <https://arxiv.org/pdf/1609.04802.pdf>` paper.
+        -`ESRGAN: Enhanced Super-Resolution Generative Adversarial Networks                    <https://arxiv.org/pdf/1809.00219.pdf>` paper.
+        -`Perceptual Extreme Super Resolution Network with Receptive Field Block               <https://arxiv.org/pdf/2005.12597.pdf>` paper.
+
+     """
+
+    def __init__(self, extraction_layers: dict[str, float], device) -> None:
+        """
+        Content loss (in SRGAN) / Perceptual loss (in GramGAN).
+        Follows the method outlined in GramGAN paper for computing a loss from the activation layer 
+        in the pre-trained VGG19 network.
+        
+        Parameters
+            extraction_layers (dict): A dict of layer
+        """
+        super(ContentLoss, self).__init__()
+
+        # Get the name of the specified feature extraction node
+        self.extraction_layers = extraction_layers
+        self.device = device
+
+        # Load the VGG19 model trained on the ImageNet dataset.
+        model = models.vgg19(weights=models.VGG19_Weights.IMAGENET1K_V1)
+
+        # Extract the thirty-sixth layer output in the VGG19 model as the content loss.
+        self.feature_extractor = create_feature_extractor(model, list(extraction_layers))
+
+        # set to validation mode
+        self.feature_extractor.eval()
+
+        # This is the VGG model preprocessing method of the ImageNet dataset.
+        # The mean and std of ImageNet. See: https://stackoverflow.com/questions/58151507/why-pytorch-officially-use-mean-0-485-0-456-0-406-and-std-0-229-0-224-0-2
+        self.normalize = transforms.Normalize(mean = [0.485, 0.456, 0.406], std = [0.229, 0.224, 0.225])
+
+        # Freeze model parameters.
+        for model_parameters in self.feature_extractor.parameters():
+            model_parameters.requires_grad = False
+
+    def forward(self, sr_tensor: Tensor, gt_tensor: Tensor) -> Tensor:
+        # Standardized operations
+        sr_tensor = self.normalize(sr_tensor)
+        gt_tensor = self.normalize(gt_tensor)
+
+        # Find the feature map difference between the two images
+        loss = torch.tensor(0.0, device = self.device)
+        for name, weight in self.extraction_layers.items():
+            sr_feature = self.feature_extractor(sr_tensor)[name]
+            gt_feature = self.feature_extractor(gt_tensor)[name]
+
+            # loss += weight * torch.linalg.vector_norm(sr_feature - gt_feature, ord = 1)
+            loss += weight * F.mse_loss(sr_feature, gt_feature)
+        
+        return loss
+
+
 
 class EuclidLoss(nn.Module):
     """"""
@@ -25,102 +87,6 @@ class EuclidLoss(nn.Module):
         loss = self.pdist(sr_tensor, gt_tensor)
 
         return loss
-
-
-class TextureLoss(nn.Module):
-    """ As described in Eq.2 in GramGAN - but without candidate patches"""
-
-    def __init__(self, ord = 2) -> None:
-        super(TextureLoss, self).__init__()
-        self.ord = ord
-
-    def gram_matrix(self, input):
-        """ from: https://pytorch.org/tutorials/advanced/neural_style_tutorial.html"""
-        a, b, c, d = input.size()  # a=batch size(=1)
-        # b=number of feature maps
-        # (c,d)=dimensions of a f. map (N=c*d)
-
-        features = input.view(a * b, c * d)  # resise F_XL into \hat F_XL
-
-        G = torch.mm(features, features.t())  # compute the gram product
-
-        # we 'normalize' the values of the gram matrix
-        # by dividing by the number of element in each feature maps.
-        return G.div(a * b * c * d)
-    
-    def forward(self, sr_tensor: Tensor, gt_tensor: Tensor) -> Tensor:
-        
-        G_e = self.gram_matrix(sr_tensor)
-        G_i = self.gram_matrix(gt_tensor)
-
-        loss = linalg.matrix_norm(G_e - G_i, ord=self.ord) ** 2
-        
-        return loss
-
-class PatchWiseTextureLoss(nn.Module):
-    """ As described in Eq.2 in GramGAN """
-
-    def __init__(self, device: str, alpha: float = 1.0, beta: float = 1.0, ord = 2, k = 50, batch_size = 16) -> None:
-        super(PatchWiseTextureLoss, self).__init__()
-        self.device = device
-        self.alpha = alpha
-        self.beta = beta
-        self.ord = ord
-        self.k = k
-        self.batch_size = batch_size
-
-        # See https://pytorch.org/functorch/stable/generated/functorch.vmap.html
-        self.batched_gram_matrix = torch.vmap(self.gram_matrix)
-
-    def gram_matrix(self, input: Tensor) -> Tensor:
-        """ from: https://pytorch.org/tutorials/advanced/neural_style_tutorial.html"""
-        b, c, d = input.size()
-        features = input.view(b, c * d)
-        G = torch.mm(features, features.t())
-
-        return G.div(b * c * d)
-    
-    def forward(self, sr_tensor: Tensor, gt_tensor: Tensor) -> Tensor:
-        
-        # In: torch.Size([16, 3, 96, 96]), Out: torch.Size([16, 3, 3])
-        G_e = self.batched_gram_matrix(sr_tensor)
-        G_i = self.batched_gram_matrix(gt_tensor)
-
-        p_dists = []
-        patches = [] # 50 x 3 x 96 x 96
-        
-        fpath = "data/ImageNet/SRGAN/train/"
-        for fname in choices(listdir(fpath), k = self.k):
-            # patch = io.read_image(fpath + fname)
-            patch = img_as_float(io.imread(fpath + fname))
-            patch = torch.tensor(patch, requires_grad = True, device=self.device)
-            patch = torch.permute(patch, (-1, 0, 1))
-            
-            G_p = self.gram_matrix(patch) # 3 x 3
-            dist = (self.alpha * linalg.matrix_norm(G_p - G_i, ord=self.ord) ** 2) + (self.beta * linalg.matrix_norm(G_p - G_e, ord=self.ord) ** 2)
-
-            patches.append(patch)
-            p_dists.append(dist)
-
-        
-        p_star_i = torch.argmin(torch.cat(p_dists, dim=0).reshape(self.k, self.batch_size), dim=0) # 1 x 16
-        
-        patches = torch.stack(patches)
-        p_star = patches[p_star_i]
-    
-        G_pi = self.batched_gram_matrix(p_star) # 16 x 3 x 3
-
-        L = linalg.matrix_norm(G_e - G_pi, ord=1) # See Eq. 4 GramGAN
-
-        return torch.mean(L)
-
-
-def gram_matrix(input):
-    """ from: https://pytorch.org/tutorials/advanced/neural_style_tutorial.html"""
-    b, c, d = input.size()
-    features = input.view(b, c * d)  # resise F_XL into \hat F_XL
-    G = torch.mm(features, features.t())  # compute the gram product
-    return G.div(b * c * d)
 
 
 class BBLoss(nn.Module):
@@ -253,20 +219,12 @@ class GBBLoss(BBLoss):
         return loss
 
 
-# class SBBLoss(BBLoss):
+# class STLoss(BBLoss):
 
 #     def __init__(self, alpha=1, beta=1, ksize=3, pad=0, stride=3, dist_norm='l2', criterion='l1'):
-#         self.batched_gram_matrix = torch.vmap(self.gram_matrix)
+        
 
 #         super().__init__(alpha, beta, ksize, pad, stride, dist_norm, criterion)
-
-#     def gram_matrix(self, input: Tensor) -> Tensor:
-#         """ from: https://pytorch.org/tutorials/advanced/neural_style_tutorial.html"""
-#         d, c = input.size()
-#         features = input.view(c, d)
-#         G = torch.mm(features, features.t())
-
-#         return G.div(c * d)
 
 #     def forward(self, x, gt):
 #         p1 = F.unfold(x, kernel_size=self.ksize, padding=self.pad, stride=self.stride)
@@ -284,6 +242,10 @@ class GBBLoss(BBLoss):
 #         p2_4 = F.unfold(gt_4, kernel_size=self.ksize, padding=self.pad, stride=self.stride)
 #         p2_4 = p2_4.permute(0, 2, 1).contiguous() # [B, H, C]
 #         p2_cat = torch.cat([p2, p2_2, p2_4], 1)
+        
+#         p1 = 
+#         p2 = 
+#         p2_cat = 
 
 #         score1 = self.alpha * self.batch_pairwise_distance(p1, p2_cat)
 #         score = score1 + self.beta * self.batch_pairwise_distance(p2, p2_cat) # [B, H, H]
