@@ -1,6 +1,6 @@
 #!/bin/bash
 ### -- set the job Name -- 
-#BSUB -J Train-SRGAN-ST[1-4]%4
+#BSUB -J Train-SRGAN-ST[1-1]%1
 
 ### -- Specify the output and error file. %J is the job-id --
 ### -- -o and -e mean append, -oo and -eo mean overwrite --
@@ -40,7 +40,8 @@ nvidia-smi
 
 now=$(date +"%m-%d-%H")
 
-declare -a exp_names=("srgan" "bbgan" "gramgan")
+declare -a exp_names=("srgan-50-epochs bbgan-50-epochs gramgan-50-epochs")
+declare -a model_names=("srgan bbgan gramgan")
 
 let i=$LSB_JOBINDEX
 let i--
@@ -51,8 +52,9 @@ source .env/bin/activate
 # module load cuda/11.7
 
 name=${exp_names[$i]}-$now
+model=${model_names[$i]}
 
-python train_srgan.py -exp_name=$name -model_name=$name
+python train_srgan.py -exp_name=$name -model_name=$model
 
 # Delete the sample directory afterwards
 rm -fr samples/$name

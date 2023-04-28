@@ -14,8 +14,7 @@
 import random
 from torch import nn
 
-from loss import EuclidLoss, PatchWiseTextureLoss, BBLoss, GBBLoss
-from model import ContentLoss
+from loss import EuclidLoss, BBLoss, GBBLoss, ContentLoss
 
 import numpy as np
 import torch
@@ -42,33 +41,35 @@ num_rcb = 16
 # Test upscale factor
 upscale_factor = 4
 # Current configuration parameter method
-mode = "test"
+mode = "train"
 # Experiment name, easy to save weights and log files
-exp_name = "SRGAN-TEST-GBBLOSS"#"SRGAN_x4-DIV2K"
+exp_name = None
 
 
-# Feature extraction layer parameter configuration
-feature_model_extractor_node = "features.35"
-feature_model_normalize_mean = [0.485, 0.456, 0.406]
-feature_model_normalize_std = [0.229, 0.224, 0.225]
+# Feature extraction layer parameter configuration. See Perceptual loss in GramGAN
+feature_model_extractor_nodes = {
+    "features.17" : 1/8,
+    "features.26" : 1/4,
+    "features.35" : 1.0 
+}
 
 srgan_losses = {
     "AdversarialLoss": nn.BCEWithLogitsLoss(),
     "PixelLoss": nn.MSELoss(),
-    "ContentLoss" : ContentLoss(feature_model_extractor_node, feature_model_normalize_mean, feature_model_normalize_std)
+    "ContentLoss" : ContentLoss(feature_model_extractor_nodes, device=device)
 }
 
 bbgan_losses = {
     "AdversarialLoss": nn.BCEWithLogitsLoss(),
     "PixelLoss": nn.MSELoss(),
-    "ContentLoss" : ContentLoss(feature_model_extractor_node, feature_model_normalize_mean, feature_model_normalize_std),
+    "ContentLoss" : ContentLoss(feature_model_extractor_nodes, device=device),
     "BBLoss" : BBLoss()
 }
 
 gramgan_losses = {
     "AdversarialLoss": nn.BCEWithLogitsLoss(),
     "PixelLoss": nn.MSELoss(),
-    "ContentLoss" : ContentLoss(feature_model_extractor_node, feature_model_normalize_mean, feature_model_normalize_std),
+    "ContentLoss" : ContentLoss(feature_model_extractor_nodes, device=device),
     "GBBLoss" : GBBLoss()
 }
 
@@ -82,7 +83,7 @@ gramgan_losses = {
 g_losses = None
 
 loss_weights = {
-    "AdversarialLoss": 0.001,
+    "AdversarialLoss": 0.005,
     "PixelLoss": 1.0,
     "ContentLoss" : 1.0,
     "BBLoss" : 1.0,
@@ -91,51 +92,47 @@ loss_weights = {
 
 save_checkpoints = True
 
-if mode == "train":
-    # Dataset address
-    train_gt_images_dir = f"./data/ImageNet/SRGAN/train"
+# if mode == "train":
+# Dataset address
+train_gt_images_dir = f"./data/ImageNet/SRGAN/train"
 
-    test_gt_images_dir = f"./data/Set5/GTmod12"
-    test_lr_images_dir = f"./data/Set5/LRbicx{upscale_factor}"
+test_gt_images_dir = f"./data/Set5/GTmod12"
+test_lr_images_dir = f"./data/Set5/LRbicx{upscale_factor}"
 
-    gt_image_size = 96
-    batch_size = 16
-    num_workers = 4
+gt_image_size = 96
+batch_size = 16
+num_workers = 4
 
-    # The address to load the pretrained model
-    pretrained_d_model_weights_path = f""
-    pretrained_g_model_weights_path = "./samples/SRResNet_x4-ImageNet/g_epoch_90.pth.tar"#f"./results/SRResNet_x4-DIV2K/g_last.pth.tar"
+# The address to load the pretrained model
+pretrained_d_model_weights_path = f""
+pretrained_g_model_weights_path = f""#"./samples/SRResNet_x4-ImageNet/g_epoch_10.pth.tar"#"./samples/SRResNet_x4-ImageNet/SRResNet_x4-ImageNet.pth.tar"#"./samples/SRResNet_x4-ImageNet/g_epoch_90.pth.tar"#f"./results/SRResNet_x4-DIV2K/g_last.pth.tar"
 
-    # Incremental training and migration training
-    resume_d_model_weights_path = f""
-    resume_g_model_weights_path = f""
+# Incremental training and migration training
+resume_d_model_weights_path = f""
+resume_g_model_weights_path = f""
 
-    # Total num epochs (200,000 iters)
-    epochs = 15
+# Total num epochs (200,000 iters)
+epochs = 50
 
-    # Loss function weight - overwritten in .sh file
-    pixel_weight = 1.0
-    content_weight = 1.0
-    adversarial_weight = 0.001
 
-    # Optimizer parameter
-    model_lr = 1e-4
-    model_betas = (0.9, 0.999)
-    model_eps = 1e-8
-    model_weight_decay = 0.0
+# Optimizer parameter
+model_lr = 1e-4
+model_betas = (0.9, 0.999)
+model_eps = 1e-8
+model_weight_decay = 0.0
 
-    # Dynamically adjust the learning rate policy [100,000 | 200,000]
-    lr_scheduler_step_size = epochs // 2
-    lr_scheduler_gamma = 0.1
+# Dynamically adjust the learning rate policy [100,000 | 200,000]
+lr_scheduler_step_size = epochs // 2
+lr_scheduler_gamma = 0.1
 
-    # How many iterations to print the training result
-    train_print_frequency = 100
-    valid_print_frequency = 1
+# How many iterations to print the training result
+train_print_frequency = 100
+valid_print_frequency = 1
 
-if mode == "test":
-    # Test data address
-    lr_dir = f"./data/Set5/LRbicx{upscale_factor}"
-    sr_dir = f"./results/test/{exp_name}"
-    gt_dir = f"./data/Set5/GTmod12"
+# if mode == "test":
+# Test data address
+lr_dir = f"./data/Set5/LRbicx{upscale_factor}"
+sr_dir = f"./results/test/{exp_name}"
+gt_dir = f"./data/Set5/GTmod12"
 
-    g_model_weights_path = "results/SRGAN-TEST-GBBLOSS/g_best.pth.tar" #"./results/pretrained_models/SRGAN_x4-ImageNet-8c4a7569.pth.tar"
+g_model_weights_path = "./results/pretrained_models/bbgan-50-epochs-04-27-08/g_last.pth.tar"
