@@ -111,7 +111,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     srgan_config.exp_name = args.exp_name
-    # srgan_config.g_model_weights_path = args.g_model_weights_path
+    srgan_config.g_model_weights_path = args.g_model_weights_path
     srgan_config.mode = "test"
 
     srgan_config.lr_dir = f"./data/Set5/LRbicx{srgan_config.upscale_factor}"

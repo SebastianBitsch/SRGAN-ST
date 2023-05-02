@@ -49,7 +49,8 @@ class TrainValidImageDataset(Dataset):
     ) -> None:
         super(TrainValidImageDataset, self).__init__()
         self.image_file_names = [os.path.join(gt_image_dir, image_file_name) for image_file_name in
-                                 os.listdir(gt_image_dir)]
+                                 absoluteFilePaths(gt_image_dir)]
+        
         self.gt_image_size = gt_image_size
         self.upscale_factor = upscale_factor
         self.mode = mode
@@ -82,6 +83,10 @@ class TrainValidImageDataset(Dataset):
     def __len__(self) -> int:
         return len(self.image_file_names)
 
+def absoluteFilePaths(directory):
+    for dirpath,_,filenames in os.walk(directory):
+        for f in filenames:
+            yield os.path.abspath(os.path.join(dirpath, f))
 
 class TestImageDataset(Dataset):
     """Define Test dataset loading methods.
@@ -94,8 +99,8 @@ class TestImageDataset(Dataset):
     def __init__(self, test_gt_images_dir: str, test_lr_images_dir: str) -> None:
         super(TestImageDataset, self).__init__()
         # Get all image file names in folder
-        self.gt_image_file_names = [os.path.join(test_gt_images_dir, x) for x in os.listdir(test_gt_images_dir) if not x.startswith('.')]
-        self.lr_image_file_names = [os.path.join(test_lr_images_dir, x) for x in os.listdir(test_lr_images_dir) if not x.startswith('.')]
+        self.gt_image_file_names = [os.path.join(test_gt_images_dir, x) for x in absoluteFilePaths(test_gt_images_dir) if not x.startswith('.')]
+        self.lr_image_file_names = [os.path.join(test_lr_images_dir, x) for x in absoluteFilePaths(test_lr_images_dir) if not x.startswith('.')]
 
     def __getitem__(self, batch_index: int) -> dict[str, torch.Tensor]:
         # Read a batch of image data

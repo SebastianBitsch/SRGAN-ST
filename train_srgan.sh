@@ -1,6 +1,6 @@
 #!/bin/bash
 ### -- set the job Name -- 
-#BSUB -J Train-SRGAN-ST[1-1]%1
+#BSUB -J Train-SRGAN-ST[1-3]%1
 
 ### -- Specify the output and error file. %J is the job-id --
 ### -- -o and -e mean append, -oo and -eo mean overwrite --
@@ -40,8 +40,8 @@ nvidia-smi
 
 now=$(date +"%m-%d-%H")
 
-declare -a exp_names=("srgan-50-epochs bbgan-50-epochs gramgan-50-epochs")
-declare -a model_names=("srgan bbgan gramgan")
+declare -a exp_names=("srgan-30-epochs" "bbgan-30-epochs" "gramgan-30-epochs")
+declare -a model_names=("srgan" "bbgan" "gramgan")
 
 let i=$LSB_JOBINDEX
 let i--

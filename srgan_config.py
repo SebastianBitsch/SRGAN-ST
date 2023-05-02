@@ -41,7 +41,7 @@ num_rcb = 16
 # Test upscale factor
 upscale_factor = 4
 # Current configuration parameter method
-mode = "train"
+mode = None
 # Experiment name, easy to save weights and log files
 exp_name = None
 
@@ -50,7 +50,7 @@ exp_name = None
 feature_model_extractor_nodes = {
     "features.17" : 1/8,
     "features.26" : 1/4,
-    "features.35" : 1.0 
+    "features.35" : 1/2
 }
 
 srgan_losses = {
@@ -94,25 +94,26 @@ save_checkpoints = True
 
 # if mode == "train":
 # Dataset address
-train_gt_images_dir = f"./data/ImageNet/SRGAN/train"
+base_dir = "/work3/s204163/"
+train_gt_images_dir = base_dir + "data/ImageNet/SRGAN/train"
 
-test_gt_images_dir = f"./data/Set5/GTmod12"
-test_lr_images_dir = f"./data/Set5/LRbicx{upscale_factor}"
+test_gt_images_dir = base_dir + "data/Set5/GTmod12"
+test_lr_images_dir = base_dir + f"data/Set5/LRbicx{upscale_factor}"
 
 gt_image_size = 96
 batch_size = 16
 num_workers = 4
 
 # The address to load the pretrained model
-pretrained_d_model_weights_path = f""
-pretrained_g_model_weights_path = f""#"./samples/SRResNet_x4-ImageNet/g_epoch_10.pth.tar"#"./samples/SRResNet_x4-ImageNet/SRResNet_x4-ImageNet.pth.tar"#"./samples/SRResNet_x4-ImageNet/g_epoch_90.pth.tar"#f"./results/SRResNet_x4-DIV2K/g_last.pth.tar"
+pretrained_d_model_weights_path = f"" # Not in use
+pretrained_g_model_weights_path = f"" # Not in use
 
 # Incremental training and migration training
-resume_d_model_weights_path = f""
-resume_g_model_weights_path = f""
+resume_d_model_weights_path = f"" # Not in use
+resume_g_model_weights_path = f"" # Not in use
 
 # Total num epochs (200,000 iters)
-epochs = 50
+epochs = 30
 
 
 # Optimizer parameter
@@ -131,8 +132,8 @@ valid_print_frequency = 1
 
 # if mode == "test":
 # Test data address
-lr_dir = f"./data/Set5/LRbicx{upscale_factor}"
+lr_dir = base_dir + f"data/Set5/LRbicx{upscale_factor}"
+gt_dir = base_dir + "data/Set5/GTmod12"
 sr_dir = f"./results/test/{exp_name}"
-gt_dir = f"./data/Set5/GTmod12"
 
-g_model_weights_path = "./results/pretrained_models/bbgan-50-epochs-04-27-08/g_last.pth.tar"
+g_model_weights_path = ""
