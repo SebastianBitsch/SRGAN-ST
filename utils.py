@@ -92,13 +92,14 @@ def save_checkpoint(
         is_best: bool = False,
         is_last: bool = False,
 ) -> None:
-    checkpoint_path = os.path.join(samples_dir, file_name)
-    torch.save(state_dict, checkpoint_path)
 
-    if is_best:
-        shutil.copyfile(checkpoint_path, os.path.join(results_dir, best_file_name))
-    if is_last:
-        shutil.copyfile(checkpoint_path, os.path.join(results_dir, last_file_name))
+    if is_best and not is_last:
+        torch.save(state_dict, os.path.join(results_dir, best_file_name))
+    if is_last and not is_best:
+        torch.save(state_dict, os.path.join(results_dir, last_file_name))
+    elif is_best and is_last:
+        torch.save(state_dict, os.path.join(results_dir, last_file_name))
+        shutil.copyfile(os.path.join(results_dir, last_file_name), os.path.join(results_dir, best_file_name))
 
 
 class Summary(Enum):
