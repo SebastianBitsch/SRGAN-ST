@@ -1,11 +1,11 @@
 #!/bin/bash
 ### -- set the job Name -- 
-#BSUB -J Train-SRGAN-ST[1-3]%1
+#BSUB -J Train-SRGAN-ST[1-3]%3
 
 ### -- Specify the output and error file. %J is the job-id --
 ### -- -o and -e mean append, -oo and -eo mean overwrite --
-#BSUB -o train_srganst_%J.out
-#BSUB -e train_srganst_%J.err
+#BSUB -o train_more_data_%J.out
+#BSUB -e train_more_data_%J.err
 # -- end of LSF options --
 
 ### -- specify queue -- 
@@ -21,10 +21,10 @@
 #BSUB -R "span[hosts=1]"
 
 ### -- specify that we need 2GB of memory per core/slot -- 
-#BSUB -R "rusage[mem=5GB]"
+#BSUB -R "rusage[mem=10GB]"
 
 ### -- set walltime limit: hh:mm --
-#BSUB -W 23:00
+#BSUB -W 24:00
 
 ### -- set the email address --
 #BSUB -u s204163@student.dtu.dk
@@ -40,7 +40,7 @@ nvidia-smi
 
 now=$(date +"%m-%d-%H")
 
-declare -a exp_names=("srgan-30-epochs" "bbgan-30-epochs" "gramgan-30-epochs")
+declare -a exp_names=("srgan-50-epochs-more-data" "bbgan-50-epochs-more-data" "gramgan-50-epochs-more-data")
 declare -a model_names=("srgan" "bbgan" "gramgan")
 
 let i=$LSB_JOBINDEX

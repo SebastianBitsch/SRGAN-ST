@@ -105,17 +105,15 @@ if __name__ == "__main__":
                     prog = 'SRGAN-ST',
                     description = 'Does super resolution',
                     epilog = 'Text at the bottom of help bla bla')
-    parser.add_argument('-exp_name', type=str, help='The name of the experiment', default="SRGAN_x4-DIV2K")
-    parser.add_argument('-g_model_weights_path', type=str, help='The path of the g weights', default="./results/pretrained_models/SRGAN_x4-ImageNet-8c4a7569.pth.tar")
+    parser.add_argument('-exp_name', type=str, help='The name of the experiment')
+    parser.add_argument('-g_weights', type=str, help='The path of the g weights')#, default="./results/pretrained_models/SRGAN_x4-ImageNet-8c4a7569.pth.tar")
     
     args = parser.parse_args()
 
     srgan_config.exp_name = args.exp_name
-    srgan_config.g_model_weights_path = args.g_model_weights_path
+    srgan_config.g_model_weights_path = args.g_weights
     srgan_config.mode = "test"
 
-    srgan_config.lr_dir = f"./data/Set5/LRbicx{srgan_config.upscale_factor}"
     srgan_config.sr_dir = f"./results/test/{srgan_config.exp_name}"
-    srgan_config.gt_dir = f"./data/Set5/GTmod12"
-
+    
     main()

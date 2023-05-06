@@ -86,10 +86,11 @@ loss_weights = {
     "AdversarialLoss": 0.005,
     "PixelLoss": 1.0,
     "ContentLoss" : 1.0,
-    "BBLoss" : 1.0,
-    "GBBLoss" : 1.0
+    "BBLoss" : 10.0,
+    "GBBLoss" : 10.0
 }
 
+# Whether to save each epoch of trained data, setting to false allows to train for more epochs
 save_checkpoints = True
 
 # if mode == "train":
@@ -113,7 +114,7 @@ resume_d_model_weights_path = f"" # Not in use
 resume_g_model_weights_path = f"" # Not in use
 
 # Total num epochs (200,000 iters)
-epochs = 30
+epochs = 20
 
 
 # Optimizer parameter
@@ -136,4 +137,5 @@ lr_dir = base_dir + f"data/Set5/LRbicx{upscale_factor}"
 gt_dir = base_dir + "data/Set5/GTmod12"
 sr_dir = f"./results/test/{exp_name}"
 
-g_model_weights_path = ""
+# Is set in test.py
+g_model_weights_path = None 
