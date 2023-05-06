@@ -113,8 +113,8 @@ pretrained_g_model_weights_path = f"" # Not in use
 resume_d_model_weights_path = f"" # Not in use
 resume_g_model_weights_path = f"" # Not in use
 
-# Total num epochs (200,000 iters)
-epochs = 20
+# Total num epochs (200,000 iters) - is set with cli argument
+epochs = None
 
 
 # Optimizer parameter
@@ -123,8 +123,8 @@ model_betas = (0.9, 0.999)
 model_eps = 1e-8
 model_weight_decay = 0.0
 
-# Dynamically adjust the learning rate policy [100,000 | 200,000]
-lr_scheduler_step_size = epochs // 2
+# Dynamically adjust the learning rate policy [100,000 | 200,000] - set with cli arg
+lr_scheduler_step_size = None#epochs // 2
 lr_scheduler_gamma = 0.1
 
 # How many iterations to print the training result

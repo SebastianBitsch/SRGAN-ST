@@ -43,6 +43,8 @@ now=$(date +"%m-%d-%H")
 declare -a exp_names=("srgan-50-epochs-more-data" "bbgan-50-epochs-more-data" "gramgan-50-epochs-more-data")
 declare -a model_names=("srgan" "bbgan" "gramgan")
 
+let epochs=50
+
 let i=$LSB_JOBINDEX
 let i--
 
@@ -54,7 +56,7 @@ source .env/bin/activate
 name=${exp_names[$i]}-$now
 model=${model_names[$i]}
 
-python train_srgan.py -exp_name=$name -model_name=$model
+python train_srgan.py -exp_name=$name -model_name=$model -epochs=$epochs
 
 # Delete the sample directory afterwards
 rm -fr samples/$name

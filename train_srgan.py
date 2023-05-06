@@ -478,11 +478,14 @@ if __name__ == "__main__":
                     epilog = 'Text at the bottom of help bla bla')
     parser.add_argument('-exp_name', type=str, help='The name of the experiment', default="SRGAN_x4-UNNAMED-EXP")
     parser.add_argument('-model_name', type=str, help="The loss functions to use")
-    
+    parser.add_argument('-epochs', type=int, help="The number of epochs to run")
+
     args = parser.parse_args()
 
     srgan_config.mode = "train"
     srgan_config.exp_name = args.exp_name
+    srgan_config.epochs = args.epochs
+    srgan_config.lr_scheduler_step_size = args.epochs // 2
 
     if args.model_name == "srgan":
         srgan_config.g_losses = srgan_config.srgan_losses
