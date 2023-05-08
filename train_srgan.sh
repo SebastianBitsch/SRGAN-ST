@@ -1,11 +1,11 @@
 #!/bin/bash
 ### -- set the job Name -- 
-#BSUB -J Train-SRGAN-ST[1-3]%3
+#BSUB -J Train-SRGAN-ST[1-1]%1
 
 ### -- Specify the output and error file. %J is the job-id --
 ### -- -o and -e mean append, -oo and -eo mean overwrite --
-#BSUB -o train_more_data_%J.out
-#BSUB -e train_more_data_%J.err
+#BSUB -o train_gramloss_%J.out
+#BSUB -e train_gramloss_%J.err
 # -- end of LSF options --
 
 ### -- specify queue -- 
@@ -40,8 +40,8 @@ nvidia-smi
 
 now=$(date +"%m-%d-%H")
 
-declare -a exp_names=("srgan-50-epochs-more-data" "bbgan-50-epochs-more-data" "gramgan-50-epochs-more-data")
-declare -a model_names=("srgan" "bbgan" "gramgan")
+declare -a exp_names=("gramgan-20-epochs-updated-loss")
+declare -a model_names=("gramgan")
 
 let epochs=50
 
