@@ -194,8 +194,10 @@ class GBBLoss(BBLoss):
         """ https://github.com/dvlab-research/Simple-SR/blob/master/utils/loss.py#L94 """
         # x and gt: torch.Size([16, 3, 96, 96])
 
-        # Get the gram matrix of the estimated patch and calculate the candidate patches
+        # Get the gram matrix of the estimated
+        #  patch and calculate the candidate patches
         g_x = self.gram_mat(x)
+        
         g_gt = self.gram_mat(gt)
         g_gt2 = self.gram_mat(F.interpolate(gt, scale_factor=1/2, mode="bicubic"))
         g_gt4 = self.gram_mat(F.interpolate(gt, scale_factor=1/4, mode="bicubic"))

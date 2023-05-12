@@ -96,8 +96,15 @@ def main() -> None:
     avg_psnr = 100 if psnr_metrics / total_files > 100 else psnr_metrics / total_files
     avg_ssim = 1 if ssim_metrics / total_files > 1 else ssim_metrics / total_files
 
-    print(f"PSNR: {avg_psnr:4.2f} [dB]\n"
-          f"SSIM: {avg_ssim:4.4f} [u]")
+
+    # Write PSNR and SSIM data to file and terminal
+    psnr_label = f"PSNR: {avg_psnr:4.2f} [dB]\n"
+    ssim_label = f"SSIM: {avg_ssim:4.4f} [u]"
+    print(psnr_label + ssim_label)
+    
+    out_file = open(f"{srgan_config.exp_name}_metrics.txt","w")
+    out_file.writelines([psnr_label, ssim_label])
+    out_file.close()
 
 
 if __name__ == "__main__":
