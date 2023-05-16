@@ -22,7 +22,7 @@ from torch.nn import Module
 from torch.optim import Optimizer
 
 __all__ = [
-    "load_state_dict", "make_directory", "save_checkpoint",
+    "load_state_dict", "save_checkpoint",
     "Summary", "AverageMeter", "ProgressMeter"
 ]
 
@@ -75,11 +75,6 @@ def load_state_dict(
         model.load_state_dict(model_state_dict)
 
         return model
-
-
-def make_directory(dir_path: str) -> None:
-    if not os.path.exists(dir_path):
-        os.makedirs(dir_path)
 
 
 def save_checkpoint(

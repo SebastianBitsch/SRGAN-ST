@@ -20,7 +20,7 @@
 ### -- specify that the cores must be on the same host -- 
 #BSUB -R "span[hosts=1]"
 
-### -- specify that we need 2GB of memory per core/slot -- 
+### -- specify that we need X GB of memory per core/slot -- 
 #BSUB -R "rusage[mem=10GB]"
 
 ### -- set walltime limit: hh:mm --

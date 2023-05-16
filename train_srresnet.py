@@ -23,7 +23,7 @@ from torch.utils.tensorboard import SummaryWriter
 
 import model
 import srresnet_config
-from dataset import CUDAPrefetcher, TrainValidImageDataset, TestImageDataset
+from dataset import TrainValidImageDataset, TestImageDataset
 from image_quality_assessment import PSNR, SSIM
 from utils import load_state_dict, make_directory, save_checkpoint, AverageMeter, ProgressMeter
 
@@ -40,7 +40,7 @@ def main():
     best_psnr = 0.0
     best_ssim = 0.0
 
-    train_prefetcher, test_prefetcher = load_dataset()
+    train_dataloader, test_dataloader = load_dataset()
     print("Load all datasets successfully.")
 
     srresnet_model = build_model()
@@ -92,14 +92,14 @@ def main():
 
     for epoch in range(start_epoch, srresnet_config.epochs):
         train(srresnet_model,
-              train_prefetcher,
+              train_dataloader,
               criterion,
               optimizer,
               epoch,
               scaler,
               writer)
         psnr, ssim = validate(srresnet_model,
-                              test_prefetcher,
+                              test_dataloader,
                               epoch,
                               writer,
                               psnr_model,
@@ -128,7 +128,7 @@ def main():
                         is_last)
 
 
-def load_dataset() -> tuple[CUDAPrefetcher, CUDAPrefetcher]:
+def load_dataset() -> tuple[DataLoader, DataLoader]:
     # Load train, test and valid datasets
     train_datasets = TrainValidImageDataset(srresnet_config.train_gt_images_dir,
                                             srresnet_config.gt_image_size,
@@ -152,11 +152,8 @@ def load_dataset() -> tuple[CUDAPrefetcher, CUDAPrefetcher]:
                                  drop_last=False,
                                  persistent_workers=True)
 
-    # Place all data on the preprocessing data loader
-    train_prefetcher = CUDAPrefetcher(train_dataloader, srresnet_config.device)
-    test_prefetcher = CUDAPrefetcher(test_dataloader, srresnet_config.device)
 
-    return train_prefetcher, test_prefetcher
+    return train_dataloader, test_dataloader
 
 
 def build_model() -> nn.Module:
@@ -188,7 +185,7 @@ def define_optimizer(srresnet_model) -> optim.Adam:
 
 def train(
         srresnet_model: nn.Module,
-        train_prefetcher: CUDAPrefetcher,
+        train_dataloader: DataLoader,
         criterion: nn.MSELoss,
         optimizer: optim.Adam,
         epoch: int,
@@ -196,7 +193,7 @@ def train(
         writer: SummaryWriter
 ) -> None:
     # Calculate how many batches of data are in each Epoch
-    batches = len(train_prefetcher)
+    batches = len(train_dataloader)
     # Print information of progress bar during training
     batch_time = AverageMeter("Time", ":6.3f")
     data_time = AverageMeter("Data", ":6.3f")
@@ -210,8 +207,8 @@ def train(
     batch_index = 0
 
     # Initialize the data loader and load the first batch of data
-    train_prefetcher.reset()
-    batch_data = train_prefetcher.next()
+    train_dataloader.reset()
+    batch_data = train_dataloader.next()
 
     # Get the initialization training time
     end = time.time()
@@ -252,7 +249,7 @@ def train(
             progress.display(batch_index + 1)
 
         # Preload the next batch of data
-        batch_data = train_prefetcher.next()
+        batch_data = train_dataloader.next()
 
         # Add 1 to the number of data batches to ensure that the terminal prints data normally
         batch_index += 1
@@ -260,7 +257,7 @@ def train(
 
 def validate(
         srresnet_model: nn.Module,
-        data_prefetcher: CUDAPrefetcher,
+        data_prefetcher: DataLoader,
         epoch: int,
         writer: SummaryWriter,
         psnr_model: nn.Module,

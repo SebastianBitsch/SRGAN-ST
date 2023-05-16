@@ -25,7 +25,7 @@ import argparse
 
 import model
 
-from dataset import CUDAPrefetcher, TrainValidImageDataset, TestImageDataset
+from dataset import TrainValidImageDataset, TestImageDataset
 from image_quality_assessment import PSNR, SSIM
 from utils import load_state_dict, make_directory, save_checkpoint, AverageMeter, ProgressMeter
 
@@ -44,7 +44,7 @@ def main():
     best_psnr = 0.0
     best_ssim = 0.0
 
-    train_prefetcher, test_prefetcher = load_dataset()
+    train_dataloader, test_dataloader = load_dataset()
     print("Load all datasets successfully.")
 
     d_model, g_model = build_model()
@@ -101,8 +101,8 @@ def main():
     # Create a experiment results
     samples_dir = os.path.join("samples", srgan_config.exp_name)
     results_dir = os.path.join("results", srgan_config.exp_name)
-    make_directory(samples_dir)
-    make_directory(results_dir)
+    os.makedirs(samples_dir, exist_ok=True)
+    os.makedirs(results_dir, exist_ok=True)
 
     # Create training process log file
     writer = SummaryWriter(os.path.join("samples", "logs", srgan_config.exp_name))
@@ -116,10 +116,9 @@ def main():
     ssim_model = ssim_model.to(device=srgan_config.device)
 
     for epoch in range(start_epoch, srgan_config.epochs):
-        train(d_model, g_model, train_prefetcher, srgan_config.g_losses, d_optimizer, g_optimizer, epoch, writer)
+        train(d_model, g_model, train_dataloader, srgan_config.g_losses, d_optimizer, g_optimizer, epoch, writer)
         
-        psnr, ssim = validate(g_model, test_prefetcher,epoch,writer,psnr_model,ssim_model,"Test")
-        print("\n")
+        psnr, ssim = validate(g_model, test_dataloader, epoch,writer,psnr_model,ssim_model,"Test")
 
         # Update LR
         d_scheduler.step()
@@ -167,19 +166,15 @@ def main():
             is_last
         )
 
-# def custom_collate_fn(batch):
-#     # return {"gt" : batch[0], "lr" : batch[1]}
-#     gts = torch.stack([item[0] for item in batch])
-#     lrs = torch.stack([item[1] for item in batch])
-#     orgs = [item[2] for item in batch]
-#     return [gts, lrs, orgs]
 
-def load_dataset() -> tuple[CUDAPrefetcher, CUDAPrefetcher]:
+def load_dataset() -> tuple[DataLoader, DataLoader]:
     # Load train, test and valid datasets
-    train_datasets = TrainValidImageDataset(srgan_config.train_gt_images_dir,
-                                            srgan_config.gt_image_size,
-                                            srgan_config.upscale_factor,
-                                            "Train")
+    train_datasets = TrainValidImageDataset(
+        srgan_config.train_gt_images_dir,
+        srgan_config.gt_image_size,
+        srgan_config.upscale_factor,
+        "Train"
+    )
     test_datasets = TestImageDataset(srgan_config.test_gt_images_dir, srgan_config.test_lr_images_dir)
 
     # Generator all dataloader
@@ -191,7 +186,6 @@ def load_dataset() -> tuple[CUDAPrefetcher, CUDAPrefetcher]:
         pin_memory=True,
         drop_last=True,
         persistent_workers=True,
-        # collate_fn=custom_collate_fn
     )
     test_dataloader = DataLoader(
         test_datasets,
@@ -201,22 +195,19 @@ def load_dataset() -> tuple[CUDAPrefetcher, CUDAPrefetcher]:
         pin_memory=True,
         drop_last=False,
         persistent_workers=True,
-        # collate_fn=custom_collate_fn
     )
 
-    # Place all data on the preprocessing data loader
-    # train_prefetcher = CUDAPrefetcher(train_dataloader, srgan_config.device)
-    # test_prefetcher = CUDAPrefetcher(test_dataloader, srgan_config.device)
-
-    return train_dataloader, test_dataloader#train_prefetcher, test_prefetcher
+    return train_dataloader, test_dataloader
 
 
 def build_model() -> tuple[nn.Module, nn.Module, nn.Module]:
     d_model = model.__dict__[srgan_config.d_arch_name]()
-    g_model = model.__dict__[srgan_config.g_arch_name](in_channels=srgan_config.in_channels,
-                                                       out_channels=srgan_config.out_channels,
-                                                       channels=srgan_config.channels,
-                                                       num_rcb=srgan_config.num_rcb)
+    g_model = model.__dict__[srgan_config.g_arch_name](
+        in_channels=srgan_config.in_channels,
+        out_channels=srgan_config.out_channels,
+        channels=srgan_config.channels,
+        num_rcb=srgan_config.num_rcb
+    )
     d_model = d_model.to(device=srgan_config.device)
     g_model = g_model.to(device=srgan_config.device)
 
@@ -261,7 +252,7 @@ def define_scheduler(d_optimizer: optim.Adam, g_optimizer: optim.Adam) -> tuple[
 def train(
         d_model: nn.Module,
         g_model: nn.Module,
-        train_prefetcher: CUDAPrefetcher,
+        train_dataloader: DataLoader,
         loss_fns,
         d_optimizer: optim.Adam,
         g_optimizer: optim.Adam,
@@ -269,7 +260,7 @@ def train(
         writer: SummaryWriter
 ) -> None:
     # Calculate how many batches of data are in each Epoch
-    batches = len(train_prefetcher)
+    batches = len(train_dataloader)
     # Print information of progress bar during training
     batch_time = AverageMeter("Time", ":6.3f")
     data_time = AverageMeter("Data", ":6.3f")
@@ -291,15 +282,10 @@ def train(
     # Initialize the number of data batches to print logs on the terminal
     batch_index = 0
 
-    # Initialize the data loader and load the first batch of data
-    # train_prefetcher.reset()
-    # batch_data = train_prefetcher.next()
-
     # Get the initialization training time
     end = time.time()
-    for gt, lr, org in train_prefetcher:
+    for gt, lr, org in train_dataloader:
         
-    # while batch_data is not None:
         # Calculate the time it takes to load a batch of data
         data_time.update(time.time() - end)
         
@@ -405,8 +391,6 @@ def train(
             writer.add_scalar("Train/D(SR)_Probability", d_sr_probability.item(), iters)
             progress.display(batch_index + 1)
 
-        # Preload the next batch of data
-        # batch_data = train_prefetcher.next()
 
         # After training a batch of data, add 1 to the number of data batches to ensure that the
         # terminal print data normally
@@ -415,7 +399,7 @@ def train(
 
 def validate(
         g_model: nn.Module,
-        data_prefetcher: CUDAPrefetcher,
+        test_dataloader: DataLoader,
         epoch: int,
         writer: SummaryWriter,
         psnr_model: nn.Module,
@@ -426,7 +410,7 @@ def validate(
     batch_time = AverageMeter("Time", ":6.3f")
     psnres = AverageMeter("PSNR", ":4.2f")
     ssimes = AverageMeter("SSIM", ":4.4f")
-    progress = ProgressMeter(len(data_prefetcher), [batch_time, psnres, ssimes], prefix=f"{mode}: ")
+    progress = ProgressMeter(len(test_dataloader), [batch_time, psnres, ssimes], prefix=f"{mode}: ")
 
     # Put the adversarial network model in validation mode
     g_model.eval()
@@ -434,18 +418,14 @@ def validate(
     # Initialize the number of data batches to print logs on the terminal
     batch_index = 0
 
-    # Initialize the data loader and load the first batch of data
-    data_prefetcher.reset()
-    batch_data = data_prefetcher.next()
-
     # Get the initialization test time
     end = time.time()
 
     with torch.no_grad():
-        while batch_data is not None:
+        for gt, lr, _ in test_dataloader:
             # Transfer the in-memory data to the CUDA device to speed up the test
-            gt = batch_data["gt"].to(device=srgan_config.device, non_blocking=True)
-            lr = batch_data["lr"].to(device=srgan_config.device, non_blocking=True)
+            gt = gt.to(device=srgan_config.device, non_blocking=True)
+            lr = lr.to(device=srgan_config.device, non_blocking=True)
 
             # Use the generator model to generate a fake sample
             sr = g_model(lr)
@@ -463,9 +443,6 @@ def validate(
             # Record training log information
             if batch_index % srgan_config.valid_print_frequency == 0:
                 progress.display(batch_index + 1)
-
-            # Preload the next batch of data
-            batch_data = data_prefetcher.next()
 
             # After training a batch of data, add 1 to the number of data batches to ensure that the
             # terminal print data normally
@@ -485,9 +462,10 @@ def validate(
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
-                    prog = 'SRGAN-ST',
-                    description = 'Does super resolution',
-                    epilog = 'Text at the bottom of help bla bla')
+        prog = 'SRGAN-ST',
+        description = 'Does super resolution',
+        epilog = 'Bottom text'
+    )
     parser.add_argument('-exp_name', type=str, help='The name of the experiment', default="SRGAN_x4-UNNAMED-EXP")
     parser.add_argument('-model_name', type=str, help="The loss functions to use")
     parser.add_argument('-epochs', type=int, help="The number of epochs to run")
