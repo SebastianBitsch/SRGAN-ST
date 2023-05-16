@@ -52,7 +52,6 @@ def main():
 
     # Initialize the loss functions by moving them to the cuda device
     define_loss()
-
     print("Define all loss functions successfully.")
 
     d_optimizer, g_optimizer = define_optimizer(d_model, g_model)
@@ -117,25 +116,9 @@ def main():
     ssim_model = ssim_model.to(device=srgan_config.device)
 
     for epoch in range(start_epoch, srgan_config.epochs):
-        train(
-            d_model,
-            g_model,
-            train_prefetcher,
-            srgan_config.g_losses,
-            d_optimizer,
-            g_optimizer,
-            epoch,
-            writer
-        )
-        psnr, ssim = validate(
-            g_model,
-            test_prefetcher,
-            epoch,
-            writer,
-            psnr_model,
-            ssim_model,
-            "Test"
-        )
+        train(d_model, g_model, train_prefetcher, srgan_config.g_losses, d_optimizer, g_optimizer, epoch, writer)
+        
+        psnr, ssim = validate(g_model, test_prefetcher,epoch,writer,psnr_model,ssim_model,"Test")
         print("\n")
 
         # Update LR
@@ -149,33 +132,47 @@ def main():
         best_ssim = max(ssim, best_ssim)
         if not srgan_config.save_checkpoints:
             continue
-        save_checkpoint({"epoch": epoch + 1,
-                         "best_psnr": best_psnr,
-                         "best_ssim": best_ssim,
-                         "state_dict": d_model.state_dict(),
-                         "optimizer": d_optimizer.state_dict(),
-                         "scheduler": d_scheduler.state_dict()},
-                        f"d_epoch_{epoch + 1}.pth.tar",
-                        samples_dir,
-                        results_dir,
-                        "d_best.pth.tar",
-                        "d_last.pth.tar",
-                        is_best,
-                        is_last)
-        save_checkpoint({"epoch": epoch + 1,
-                         "best_psnr": best_psnr,
-                         "best_ssim": best_ssim,
-                         "state_dict": g_model.state_dict(),
-                         "optimizer": g_optimizer.state_dict(),
-                         "scheduler": g_scheduler.state_dict()},
-                        f"g_epoch_{epoch + 1}.pth.tar",
-                        samples_dir,
-                        results_dir,
-                        "g_best.pth.tar",
-                        "g_last.pth.tar",
-                        is_best,
-                        is_last)
+        save_checkpoint(
+            {
+                "epoch": epoch + 1,
+                "best_psnr": best_psnr,
+                "best_ssim": best_ssim,
+                "state_dict": d_model.state_dict(),
+                "optimizer": d_optimizer.state_dict(),
+                "scheduler": d_scheduler.state_dict()
+            },
+            f"d_epoch_{epoch + 1}.pth.tar",
+            samples_dir,
+            results_dir,
+            "d_best.pth.tar",
+            "d_last.pth.tar",
+            is_best,
+            is_last
+        )
+        save_checkpoint(
+            {
+                "epoch": epoch + 1,
+                "best_psnr": best_psnr,
+                "best_ssim": best_ssim,
+                "state_dict": g_model.state_dict(),
+                "optimizer": g_optimizer.state_dict(),
+                "scheduler": g_scheduler.state_dict()
+            },
+            f"g_epoch_{epoch + 1}.pth.tar",
+            samples_dir,
+            results_dir,
+            "g_best.pth.tar",
+            "g_last.pth.tar",
+            is_best,
+            is_last
+        )
 
+# def custom_collate_fn(batch):
+#     # return {"gt" : batch[0], "lr" : batch[1]}
+#     gts = torch.stack([item[0] for item in batch])
+#     lrs = torch.stack([item[1] for item in batch])
+#     orgs = [item[2] for item in batch]
+#     return [gts, lrs, orgs]
 
 def load_dataset() -> tuple[CUDAPrefetcher, CUDAPrefetcher]:
     # Load train, test and valid datasets
@@ -186,26 +183,32 @@ def load_dataset() -> tuple[CUDAPrefetcher, CUDAPrefetcher]:
     test_datasets = TestImageDataset(srgan_config.test_gt_images_dir, srgan_config.test_lr_images_dir)
 
     # Generator all dataloader
-    train_dataloader = DataLoader(train_datasets,
-                                  batch_size=srgan_config.batch_size,
-                                  shuffle=True,
-                                  num_workers=srgan_config.num_workers,
-                                  pin_memory=True,
-                                  drop_last=True,
-                                  persistent_workers=True)
-    test_dataloader = DataLoader(test_datasets,
-                                 batch_size=1,
-                                 shuffle=False,
-                                 num_workers=1,
-                                 pin_memory=True,
-                                 drop_last=False,
-                                 persistent_workers=True)
+    train_dataloader = DataLoader(
+        train_datasets,
+        batch_size=srgan_config.batch_size,
+        shuffle=True,
+        num_workers=srgan_config.num_workers,
+        pin_memory=True,
+        drop_last=True,
+        persistent_workers=True,
+        # collate_fn=custom_collate_fn
+    )
+    test_dataloader = DataLoader(
+        test_datasets,
+        batch_size=1,
+        shuffle=False,
+        num_workers=1,
+        pin_memory=True,
+        drop_last=False,
+        persistent_workers=True,
+        # collate_fn=custom_collate_fn
+    )
 
     # Place all data on the preprocessing data loader
-    train_prefetcher = CUDAPrefetcher(train_dataloader, srgan_config.device)
-    test_prefetcher = CUDAPrefetcher(test_dataloader, srgan_config.device)
+    # train_prefetcher = CUDAPrefetcher(train_dataloader, srgan_config.device)
+    # test_prefetcher = CUDAPrefetcher(test_dataloader, srgan_config.device)
 
-    return train_prefetcher, test_prefetcher
+    return train_dataloader, test_dataloader#train_prefetcher, test_prefetcher
 
 
 def build_model() -> tuple[nn.Module, nn.Module, nn.Module]:
@@ -221,8 +224,10 @@ def build_model() -> tuple[nn.Module, nn.Module, nn.Module]:
 
 
 def define_loss() -> None:
+    """ Initialize the loss functions by moving them to the cuda device """
     for name, loss in srgan_config.g_losses.items():
         srgan_config.g_losses[name] = loss.to(device=srgan_config.device)
+
 
 def define_optimizer(d_model, g_model) -> tuple[optim.Adam, optim.Adam]:
     d_optimizer = optim.Adam(d_model.parameters(),
@@ -239,16 +244,17 @@ def define_optimizer(d_model, g_model) -> tuple[optim.Adam, optim.Adam]:
     return d_optimizer, g_optimizer
 
 
-def define_scheduler(
-        d_optimizer: optim.Adam,
-        g_optimizer: optim.Adam
-) -> tuple[lr_scheduler.StepLR, lr_scheduler.StepLR]:
-    d_scheduler = lr_scheduler.StepLR(d_optimizer,
-                                      srgan_config.lr_scheduler_step_size,
-                                      srgan_config.lr_scheduler_gamma)
-    g_scheduler = lr_scheduler.StepLR(g_optimizer,
-                                      srgan_config.lr_scheduler_step_size,
-                                      srgan_config.lr_scheduler_gamma)
+def define_scheduler(d_optimizer: optim.Adam, g_optimizer: optim.Adam) -> tuple[lr_scheduler.StepLR, lr_scheduler.StepLR]:
+    d_scheduler = lr_scheduler.StepLR(
+        d_optimizer,
+        srgan_config.lr_scheduler_step_size,
+        srgan_config.lr_scheduler_gamma
+    )
+    g_scheduler = lr_scheduler.StepLR(
+        g_optimizer,
+        srgan_config.lr_scheduler_step_size,
+        srgan_config.lr_scheduler_gamma
+    )
     return d_scheduler, g_scheduler
 
 
@@ -286,19 +292,21 @@ def train(
     batch_index = 0
 
     # Initialize the data loader and load the first batch of data
-    train_prefetcher.reset()
-    batch_data = train_prefetcher.next()
+    # train_prefetcher.reset()
+    # batch_data = train_prefetcher.next()
 
     # Get the initialization training time
     end = time.time()
-
-    while batch_data is not None:
+    for gt, lr, org in train_prefetcher:
+        
+    # while batch_data is not None:
         # Calculate the time it takes to load a batch of data
         data_time.update(time.time() - end)
-
+        
         # Transfer in-memory data to CUDA devices to speed up training
-        gt = batch_data["gt"].to(device=srgan_config.device, non_blocking=True)
-        lr = batch_data["lr"].to(device=srgan_config.device, non_blocking=True)
+        gt = gt.to(device=srgan_config.device, non_blocking=True)
+        lr = lr.to(device=srgan_config.device, non_blocking=True)
+        org = org.to(device=srgan_config.device, non_blocking=True)
 
         # Set the real sample label to 1, and the false sample label to 0
         batch_size, _, height, width = gt.shape
@@ -355,7 +363,11 @@ def train(
         for name, loss_fn in loss_fns.items():
             if name == "AdversarialLoss":
                 continue
-            val = srgan_config.loss_weights[name] * loss_fn(sr, gt)
+            elif name == "BBLoss":
+                val = srgan_config.loss_weights[name] * loss_fn(sr, gt, org)
+            else:
+                val = srgan_config.loss_weights[name] * loss_fn(sr, gt)
+            
             g_loss += val
             loss_vals.append(val.detach().cpu().numpy())
         
@@ -394,7 +406,7 @@ def train(
             progress.display(batch_index + 1)
 
         # Preload the next batch of data
-        batch_data = train_prefetcher.next()
+        # batch_data = train_prefetcher.next()
 
         # After training a batch of data, add 1 to the number of data batches to ensure that the
         # terminal print data normally

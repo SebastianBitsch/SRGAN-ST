@@ -143,7 +143,10 @@ class BBLoss(nn.Module):
 
         return dist
 
-    def forward(self, x, gt):
+    def forward(self, x, _, gt):
+        """ https://github.com/dvlab-research/Simple-SR/blob/master/utils/loss.py#L94 """
+        # x and gt: torch.Size([16, 3, 96, 96])
+
         p1 = F.unfold(x, kernel_size=self.ksize, padding=self.pad, stride=self.stride)
         B, C, H = p1.size()
         p1 = p1.permute(0, 2, 1).contiguous() # [B, H, C]

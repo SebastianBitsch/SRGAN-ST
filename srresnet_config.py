@@ -47,7 +47,7 @@ save_checkpoints = True
 
 if mode == "train":
     # Dataset address
-    train_gt_images_dir = f"./data/ImageNet/SRGAN/train"
+    train_gt_images_dir = f"./data/ImageNet/train"
 
     test_gt_images_dir = f"./data/Set5/GTmod12"
     test_lr_images_dir = f"./data/Set5/LRbicx{upscale_factor}"

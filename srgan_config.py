@@ -95,14 +95,19 @@ save_checkpoints = True
 
 # if mode == "train":
 # Dataset address
-base_dir = "/work3/s204163/"
-train_gt_images_dir = base_dir + "data/ImageNet/SRGAN/train"
+base_dir = "/work3/s204163"
+data_dir = "/data"
+train_gt_images_dir = base_dir + data_dir + "/ImageNet/train"
 
-test_gt_images_dir = base_dir + "data/Set5/GTmod12"
-test_lr_images_dir = base_dir + f"data/Set5/LRbicx{upscale_factor}"
+test_gt_images_dir = base_dir + data_dir + "/Set5/GTmod12"
+test_lr_images_dir = base_dir + data_dir + f"/Set5/LRbicx{upscale_factor}"
 
+# Create gt images by selecting a random crop of size x (96) from the images which have sliced to y (128) pixels
 gt_image_size = 96
+
 batch_size = 16
+
+# Makes parallelized tasks such as loading data faster
 num_workers = 4
 
 # The address to load the pretrained model
@@ -133,8 +138,8 @@ valid_print_frequency = 1
 
 # if mode == "test":
 # Test data address
-lr_dir = base_dir + f"data/Set5/LRbicx{upscale_factor}"
-gt_dir = base_dir + "data/Set5/GTmod12"
+lr_dir = base_dir + data_dir + f"/Set5/LRbicx{upscale_factor}"
+gt_dir = base_dir + data_dir + "/Set5/GTmod12"
 sr_dir = f"./results/test/{exp_name}"
 
 # Is set in test.py

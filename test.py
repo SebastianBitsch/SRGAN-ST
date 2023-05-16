@@ -102,7 +102,7 @@ def main() -> None:
     ssim_label = f"SSIM: {avg_ssim:4.4f} [u]"
     print(psnr_label + ssim_label)
     
-    out_file = open(f"{srgan_config.exp_name}_metrics.txt","w")
+    out_file = open(f"results/test/{srgan_config.exp_name}/metrics.txt","w")
     out_file.writelines([psnr_label, ssim_label])
     out_file.close()
 

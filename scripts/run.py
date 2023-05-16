@@ -19,7 +19,7 @@ import os
 # OBS: when 800 all images are used it results in 482070 sliced images
 # OBS: that gives 482070/800 ~= 602 sliced images per image
 # OBS: using 20 images then gives around 12k training images
-# OBS: using 50 images then gives around 30k training images
+# OBS: using 50 images then gives around 30k training images -> since we now crop we only get 7200
 # OBS: there were 2837 images in original training data
 
-os.system("python3 ./prepare_dataset.py --images_dir /work3/s204163/data/ImageNet/original --output_dir /work3/s204163/data/ImageNet/SRGAN/train --image_size 128 --step 64 --num_workers 16 --num_images 50")
+os.system("python3 ./prepare_dataset.py --images_dir=/work3/s204163/data/ImageNet/original --cropped_dir=/work3/s204163/data/ImageNet/cropped --output_dir=/work3/s204163/data/ImageNet/train --image_size=128 --step=64 --num_workers=16 --num_images=50")

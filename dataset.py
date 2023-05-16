@@ -40,13 +40,7 @@ class TrainValidImageDataset(Dataset):
             verification dataset is not for data enhancement.
     """
 
-    def __init__(
-            self,
-            gt_image_dir: str,
-            gt_image_size: int,
-            upscale_factor: int,
-            mode: str,
-    ) -> None:
+    def __init__(self, gt_image_dir: str, gt_image_size: int, upscale_factor: int, mode: str) -> None:
         super(TrainValidImageDataset, self).__init__()
         self.image_file_names = [os.path.join(gt_image_dir, image_file_name) for image_file_name in
                                  absoluteFilePaths(gt_image_dir)]
@@ -57,8 +51,16 @@ class TrainValidImageDataset(Dataset):
 
     def __getitem__(self, batch_index: int) -> dict[str, Tensor]:
         # Read a batch of image data
-        gt_image = cv2.imread(self.image_file_names[batch_index]).astype(np.float32) / 255.
-
+        im_path = self.image_file_names[batch_index]
+        gt_image = cv2.imread(im_path).astype(np.float32) / 255.
+        
+        # Get the original image. i.e. go from /work3/s204163/data/ImageNet/train/0150_0043.png -> im_59.bmp
+        org_im_path = im_path.replace("/train/", "/cropped/")
+        org_im_name = "/".join(org_im_path.split("_")[:-1])
+        
+        org_im_name = f"{org_im_name}.png"
+        org_image = cv2.imread(org_im_name).astype(np.float32) / 255.
+        
         # Image processing operations
         if self.mode == "Train":
             gt_crop_image = imgproc.random_crop(gt_image, self.gt_image_size)
@@ -77,8 +79,10 @@ class TrainValidImageDataset(Dataset):
         # Note: The range of input and output is between [0, 1]
         gt_crop_tensor = imgproc.image_to_tensor(gt_crop_image, False, False)
         lr_crop_tensor = imgproc.image_to_tensor(lr_crop_image, False, False)
+        org_image_tensor = imgproc.image_to_tensor(org_image, False, False)
 
-        return {"gt": gt_crop_tensor, "lr": lr_crop_tensor}
+        # return {"gt": gt_crop_tensor, "lr": lr_crop_tensor, "original": org_image_tensor}
+        return [gt_crop_tensor, lr_crop_tensor, org_image_tensor]#, "original": org_image}
 
     def __len__(self) -> int:
         return len(self.image_file_names)
@@ -216,6 +220,12 @@ class CUDAPrefetcher:
             self.batch_data = None
             return None
 
+        # with torch.cuda.stream(self.stream):
+        #     for i in range(len(self.batch_data)):
+        #         if torch.is_tensor(self.batch_data[i]):
+        #             self.batch_data[i] = self.batch_data[i].to(self.device, non_blocking=True)
+            # self.batch_data[0] = self.batch_data[0].to(self.device, non_blocking=True)
+            # self.batch_data[1] = self.batch_data[1].to(self.device, non_blocking=True)
         with torch.cuda.stream(self.stream):
             for k, v in self.batch_data.items():
                 if torch.is_tensor(v):
