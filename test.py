@@ -22,30 +22,27 @@ import imgproc
 import model
 import srgan_config
 from image_quality_assessment import PSNR, SSIM
-from utils import make_directory
-
-model_names = sorted(
-    name for name in model.__dict__ if
-    name.islower() and not name.startswith("__") and callable(model.__dict__[name]))
 
 
 def main() -> None:
     # Initialize the super-resolution bsrgan_model
-    g_model = model.__dict__[srgan_config.g_arch_name](in_channels=srgan_config.in_channels,
-                                                       out_channels=srgan_config.out_channels,
-                                                       channels=srgan_config.channels,
-                                                       num_rcb=srgan_config.num_rcb)
+    g_model = model.Generator(
+        in_channels=srgan_config.in_channels,
+        out_channels=srgan_config.out_channels,
+        channels=srgan_config.channels,
+        num_rcb=srgan_config.num_rcb,
+        upscale_factor=srgan_config.upscale_factor
+    )
     g_model = g_model.to(device=srgan_config.device)
-    print(f"Build `{srgan_config.g_arch_name}` model successfully.")
+    print(f"Successfully built generator.")
 
     # Load the super-resolution bsrgan_model weights
-    checkpoint = torch.load(srgan_config.g_model_weights_path, map_location=lambda storage, loc: storage)
+    checkpoint = torch.load(srgan_config.g_model_weights_path, map_location=lambda storage, _: storage)
     g_model.load_state_dict(checkpoint["state_dict"])
-    print(f"Load `{srgan_config.g_arch_name}` model weights "
-          f"`{os.path.abspath(srgan_config.g_model_weights_path)}` successfully.")
+    print(f"Loaded generator model weights {os.path.abspath(srgan_config.g_model_weights_path)} successfully.")
 
     # Create a folder of super-resolution experiment results
-    make_directory(srgan_config.sr_dir)
+    os.makedirs(srgan_config.sr_dir, exist_ok=True)
 
     # Start the verification mode of the bsrgan_model.
     g_model.eval()

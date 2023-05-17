@@ -40,10 +40,10 @@ nvidia-smi
 
 now=$(date +"%m-%d-%H")
 
-declare -a exp_names=("gramgan-50-epochs-updated-loss-try-2")
-declare -a model_names=("gramgan")
+declare -a exp_names=("bbgan-new-loss-rewrite4")
+declare -a model_names=("bbgan")
 
-let epochs=50
+let epochs=1
 
 let i=$LSB_JOBINDEX
 let i--

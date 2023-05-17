@@ -77,10 +77,7 @@ class EuclidLoss(nn.Module):
         super(EuclidLoss, self).__init__()
         self.pdist = nn.PairwiseDistance(p=2)
 
-    def forward(self, sr_tensor: Tensor, gt_tensor: Tensor) -> Tensor:
-        # Input: torch.Size([16, 3, 96, 96])
-        
-        # torch.Size([16*3*96*96])
+    def forward(self, sr_tensor: Tensor, gt_tensor: Tensor) -> Tensor:        
         sr_tensor = torch.flatten(sr_tensor)
         gt_tensor = torch.flatten(gt_tensor)
         
@@ -89,9 +86,10 @@ class EuclidLoss(nn.Module):
         return loss
 
 
-class BBLoss(nn.Module):
+class BBL(nn.Module):
+    """ https://github.com/dvlab-research/Simple-SR/blob/08c71e9e46ba781df50893f0476ecd0fc004aa45/utils/loss.py#L54 """
     def __init__(self, alpha=1.0, beta=1.0, ksize=3, pad=0, stride=3, dist_norm='l2', criterion='l1'):
-        super(BBLoss, self).__init__()
+        super(BBL, self).__init__()
         self.alpha = alpha
         self.beta = beta
         self.ksize = ksize
@@ -106,10 +104,33 @@ class BBLoss(nn.Module):
         else:
             raise NotImplementedError('%s criterion has not been supported.' % criterion)
 
+    def pairwise_distance(self, x, y=None):
+        '''
+        Input: x is a Nxd matrix
+               y is an optional Mxd matirx
+        Output: dist is a BxNxM matrix where dist[i,j] is the square norm between x[i,:] and y[j,:]
+                if y is not given then use 'y=x'.
+        i.e. dist[i,j] = ||x[i,:]-y[j,:]||^2
+        '''
+        x_norm = (x ** 2).sum(1).view(-1, 1)
+        if y is not None:
+            y_t = torch.transpose(y, 0, 1)
+            y_norm = (y ** 2).sum(1).view(1, -1)
+        else:
+            y_t = torch.transpose(x, 0, 1)
+            y_norm = x_norm.view(1, -1)
+
+        dist = x_norm + y_norm - 2.0 * torch.mm(x, y_t)
+        # Ensure diagonal is zero if x=y
+        if y is None:
+            dist = dist - torch.diag(dist.diag())
+
+        return torch.clamp(dist, 0.0, np.inf)
+
     def batch_pairwise_distance(self, x, y=None):
         '''
         Input: x is a BxNxd matrix
-                y is an optional BxMxd matrix
+               y is an optional BxMxd matirx
         Output: dist is a BxNxM matrix where dist[b,i,j] is the square norm between x[b,i,:] and y[b,j,:]
                 if y is not given then use 'y=x'.
         i.e. dist[b,i,j] = ||x[b,i,:]-y[b,j,:]||^2
@@ -143,10 +164,7 @@ class BBLoss(nn.Module):
 
         return dist
 
-    def forward(self, x, _, gt):
-        """ https://github.com/dvlab-research/Simple-SR/blob/master/utils/loss.py#L94 """
-        # x and gt: torch.Size([16, 3, 96, 96])
-
+    def forward(self, x, gt):
         p1 = F.unfold(x, kernel_size=self.ksize, padding=self.pad, stride=self.stride)
         B, C, H = p1.size()
         p1 = p1.permute(0, 2, 1).contiguous() # [B, H, C]
@@ -173,6 +191,7 @@ class BBLoss(nn.Module):
         loss = self.criterion(p1, sel_p2)
 
         return loss
+
 
 
 class GBBLoss(BBLoss):

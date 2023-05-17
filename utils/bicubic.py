@@ -13,12 +13,6 @@ import numpy as np
 # Usage:
 # python utils/bicubic.py --images_dir="SRGAN/data/Set5/LRbicx16" --output_dir="bicubic_test"
 
-def listdir_nohidden(path):
-    """ List dir but ignores hidden files; .DSStore etc."""
-    for f in os.listdir(path):
-        if not f.startswith('.'):
-            yield f
-
 # Interpolation kernel
 def u(s,a):
     if (abs(s) >=0) & (abs(s) <=1):

@@ -12,19 +12,12 @@
 # limitations under the License.
 # ==============================================================================
 import math
-from typing import Any
-
 import torch
 from torch import Tensor
 from torch import nn
 
-__all__ = [
-    "SRResNet", "Discriminator",
-    "srresnet_x4", "discriminator", "content_loss",
-]
 
-
-class SRResNet(nn.Module):
+class Generator(nn.Module):
     def __init__(
             self,
             in_channels: int,
@@ -33,7 +26,7 @@ class SRResNet(nn.Module):
             num_rcb: int,
             upscale_factor: int
     ) -> None:
-        super(SRResNet, self).__init__()
+        super(Generator, self).__init__()
         # Low frequency information extraction layer
         self.conv1 = nn.Sequential(
             nn.Conv2d(in_channels, channels, (9, 9), (1, 1), (4, 4)),
@@ -97,6 +90,10 @@ class Discriminator(nn.Module):
     def __init__(self) -> None:
         super(Discriminator, self).__init__()
         self.features = nn.Sequential(
+            # input size. (3) x 192 x 192
+            nn.Conv2d(3, 3, 3, 1, 1, bias=True),
+            nn.Conv2d(3, 3, 4, 2, 1, bias=False),
+            nn.BatchNorm2d(3, affine=True),
             # input size. (3) x 96 x 96
             nn.Conv2d(3, 64, (3, 3), (1, 1), (1, 1), bias=True),
             nn.LeakyReLU(0.2, True),
@@ -135,7 +132,7 @@ class Discriminator(nn.Module):
 
     def forward(self, x: Tensor) -> Tensor:
         # Input image size must equal 96
-        assert x.shape[2] == 96 and x.shape[3] == 96, "Image shape must equal 96x96"
+        # assert x.shape[2] == 96 and x.shape[3] == 96, "Image shape must equal 96x96"
 
         out = self.features(x)
         out = torch.flatten(out, 1)
@@ -178,17 +175,3 @@ class _UpsampleBlock(nn.Module):
         out = self.upsample_block(x)
 
         return out
-
-
-
-def srresnet_x4(**kwargs: Any) -> SRResNet:
-    model = SRResNet(upscale_factor=4, **kwargs)
-
-    return model
-
-
-def discriminator() -> Discriminator:
-    model = Discriminator()
-
-    return model
-

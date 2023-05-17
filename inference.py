@@ -22,10 +22,6 @@ import imgproc
 import model
 from utils import load_state_dict
 
-model_names = sorted(
-    name for name in model.__dict__ if
-    name.islower() and not name.startswith("__") and callable(model.__dict__[name]))
-
 
 def choice_device(device_type: str) -> torch.device:
     # Select model processing equipment type

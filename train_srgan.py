@@ -13,7 +13,6 @@
 # ==============================================================================
 import os
 import time
-import numpy as np
 
 import torch
 from torch import nn
@@ -25,16 +24,11 @@ import argparse
 
 import model
 
-from dataset import TrainValidImageDataset, TestImageDataset
+from dataset import TrainImageDataset, TestImageDataset
 from image_quality_assessment import PSNR, SSIM
-from utils import load_state_dict, make_directory, save_checkpoint, AverageMeter, ProgressMeter
+from utils import load_state_dict, save_checkpoint, AverageMeter, ProgressMeter
 
 import srgan_config
-
-model_names = sorted(
-    name for name in model.__dict__ if
-    name.islower() and not name.startswith("__") and callable(model.__dict__[name]))
-
 
 def main():
     # Initialize the number of training epochs
@@ -44,11 +38,11 @@ def main():
     best_psnr = 0.0
     best_ssim = 0.0
 
-    train_dataloader, test_dataloader = load_dataset()
+    train_dataloader, test_dataloader = build_dataloaders()
     print("Load all datasets successfully.")
 
     d_model, g_model = build_model()
-    print(f"Build `{srgan_config.g_arch_name}` model successfully.")
+    print(f"Successfully built generator.")
 
     # Initialize the loss functions by moving them to the cuda device
     define_loss()
@@ -167,15 +161,16 @@ def main():
         )
 
 
-def load_dataset() -> tuple[DataLoader, DataLoader]:
+def build_dataloaders() -> tuple[DataLoader, DataLoader]:
     # Load train, test and valid datasets
-    train_datasets = TrainValidImageDataset(
+    train_datasets = TrainImageDataset(
         srgan_config.train_gt_images_dir,
-        srgan_config.gt_image_size,
         srgan_config.upscale_factor,
-        "Train"
     )
-    test_datasets = TestImageDataset(srgan_config.test_gt_images_dir, srgan_config.test_lr_images_dir)
+    test_datasets = TestImageDataset(
+        srgan_config.test_gt_images_dir, 
+        srgan_config.test_lr_images_dir
+    )
 
     # Generator all dataloader
     train_dataloader = DataLoader(
@@ -201,13 +196,15 @@ def load_dataset() -> tuple[DataLoader, DataLoader]:
 
 
 def build_model() -> tuple[nn.Module, nn.Module, nn.Module]:
-    d_model = model.__dict__[srgan_config.d_arch_name]()
-    g_model = model.__dict__[srgan_config.g_arch_name](
+    d_model = model.Discriminator()
+    g_model = model.Generator(
         in_channels=srgan_config.in_channels,
         out_channels=srgan_config.out_channels,
         channels=srgan_config.channels,
-        num_rcb=srgan_config.num_rcb
+        num_rcb=srgan_config.num_rcb,
+        upscale_factor=srgan_config.upscale_factor
     )
+
     d_model = d_model.to(device=srgan_config.device)
     g_model = g_model.to(device=srgan_config.device)
 
@@ -250,14 +247,14 @@ def define_scheduler(d_optimizer: optim.Adam, g_optimizer: optim.Adam) -> tuple[
 
 
 def train(
-        d_model: nn.Module,
-        g_model: nn.Module,
-        train_dataloader: DataLoader,
-        loss_fns,
-        d_optimizer: optim.Adam,
-        g_optimizer: optim.Adam,
-        epoch: int,
-        writer: SummaryWriter
+    d_model: nn.Module,
+    g_model: nn.Module,
+    train_dataloader: DataLoader,
+    loss_fns,
+    d_optimizer: optim.Adam,
+    g_optimizer: optim.Adam,
+    epoch: int,
+    writer: SummaryWriter
 ) -> None:
     # Calculate how many batches of data are in each Epoch
     batches = len(train_dataloader)
@@ -284,7 +281,7 @@ def train(
 
     # Get the initialization training time
     end = time.time()
-    for gt, lr, org in train_dataloader:
+    for gt, lr in train_dataloader:
         
         # Calculate the time it takes to load a batch of data
         data_time.update(time.time() - end)
@@ -292,7 +289,6 @@ def train(
         # Transfer in-memory data to CUDA devices to speed up training
         gt = gt.to(device=srgan_config.device, non_blocking=True)
         lr = lr.to(device=srgan_config.device, non_blocking=True)
-        org = org.to(device=srgan_config.device, non_blocking=True)
 
         # Set the real sample label to 1, and the false sample label to 0
         batch_size, _, height, width = gt.shape
@@ -350,7 +346,7 @@ def train(
             if name == "AdversarialLoss":
                 continue
             elif name == "BBLoss":
-                val = srgan_config.loss_weights[name] * loss_fn(sr, gt, org)
+                val = srgan_config.loss_weights[name] * loss_fn(sr, gt)
             else:
                 val = srgan_config.loss_weights[name] * loss_fn(sr, gt)
             
@@ -422,7 +418,7 @@ def validate(
     end = time.time()
 
     with torch.no_grad():
-        for gt, lr, _ in test_dataloader:
+        for gt, lr in test_dataloader:
             # Transfer the in-memory data to the CUDA device to speed up the test
             gt = gt.to(device=srgan_config.device, non_blocking=True)
             lr = lr.to(device=srgan_config.device, non_blocking=True)

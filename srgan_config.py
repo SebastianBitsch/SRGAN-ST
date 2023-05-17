@@ -30,9 +30,7 @@ device = torch.device("cuda", 0)
 cudnn.benchmark = True
 # When evaluating the performance of the SR model, whether to verify only the Y channel image data
 only_test_y_channel = True
-# Model architecture name
-d_arch_name = "discriminator"
-g_arch_name = "srresnet_x4"
+
 # Model arch config
 in_channels = 3
 out_channels = 3
@@ -102,8 +100,8 @@ train_gt_images_dir = base_dir + data_dir + "/ImageNet/train"
 test_gt_images_dir = base_dir + data_dir + "/Set5/GTmod12"
 test_lr_images_dir = base_dir + data_dir + f"/Set5/LRbicx{upscale_factor}"
 
-# Create gt images by selecting a random crop of size x (96) from the images which have sliced to y (128) pixels
-gt_image_size = 96
+# The size of our GT Images, ideally the same as has been used when slicing images in image_slicer.py
+gt_image_size = 48 * 4
 
 batch_size = 16
 
