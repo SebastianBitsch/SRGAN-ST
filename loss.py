@@ -71,7 +71,7 @@ class ContentLoss(nn.Module):
 
 
 class EuclidLoss(nn.Module):
-    """"""
+    """  """
 
     def __init__(self) -> None:
         super(EuclidLoss, self).__init__()
@@ -86,10 +86,10 @@ class EuclidLoss(nn.Module):
         return loss
 
 
-class BBL(nn.Module):
+class BBLoss(nn.Module):
     """ https://github.com/dvlab-research/Simple-SR/blob/08c71e9e46ba781df50893f0476ecd0fc004aa45/utils/loss.py#L54 """
     def __init__(self, alpha=1.0, beta=1.0, ksize=3, pad=0, stride=3, dist_norm='l2', criterion='l1'):
-        super(BBL, self).__init__()
+        super(BBLoss, self).__init__()
         self.alpha = alpha
         self.beta = beta
         self.ksize = ksize

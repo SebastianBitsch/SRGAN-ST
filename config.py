@@ -17,7 +17,10 @@ class Config:
 
     MODEL = dotdict()
     MODEL.DEVICE = 'cuda'
-    
+    MODEL.G.IN_CHANNEL = 3
+    MODEL.G.OUT_CHANNEL = 3
+
+
 
 
 config = Config()

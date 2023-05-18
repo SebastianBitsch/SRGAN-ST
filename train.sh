@@ -1,11 +1,12 @@
 #!/bin/bash
+
 ### -- set the job Name -- 
 #BSUB -J Train-SRGAN-ST[1-1]%1
 
 ### -- Specify the output and error file. %J is the job-id --
 ### -- -o and -e mean append, -oo and -eo mean overwrite --
-#BSUB -o train_gramloss_%J.out
-#BSUB -e train_gramloss_%J.err
+#BSUB -o logs/log_train_gramloss_%J.out
+#BSUB -e logs/log_train_gramloss_%J.err
 # -- end of LSF options --
 
 ### -- specify queue -- 
@@ -35,28 +36,19 @@
 
 nvidia-smi
 
+exp_names=("bbgan-sh" "srgan-sh" "gramgan-sh")
+model_names=("bbgan" "srgan" "gramgan")
 
-# Load the cuda module
+num_epochs=1
 
-now=$(date +"%m-%d-%H")
+job_index=$((LSB_JOBINDEX-1))
 
-declare -a exp_names=("bbgan-new-loss-rewrite4")
-declare -a model_names=("bbgan")
 
-let epochs=1
-
-let i=$LSB_JOBINDEX
-let i--
+name=${exp_names[$job_index]}
+model=${model_names[$job_index]}
 
 source .env/bin/activate
-
-# module load python3/3.10.7
-# module load cuda/11.7
-
-name=${exp_names[$i]}-$now
-model=${model_names[$i]}
-
-python train_srgan.py -exp_name=$name -model_name=$model -epochs=$epochs
+python train.py -exp_name=$name -model_name=$model -epochs=$num_epochs
 
 # Delete the sample directory afterwards
 rm -fr samples/$name

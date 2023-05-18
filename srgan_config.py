@@ -21,15 +21,15 @@ import torch
 from torch.backends import cudnn
 
 # Random seed to maintain reproducible results
-random.seed(0)
-torch.manual_seed(0)
-np.random.seed(0)
+random.seed(0) # ok
+torch.manual_seed(0) # ok
+np.random.seed(0) # ok
 # Use GPU for training by default
-device = torch.device("cuda", 0)
+device = torch.device("cuda", 0) # ok
 # Turning on when the image size does not change during training can speed up training
-cudnn.benchmark = True
+cudnn.benchmark = True # ok
 # When evaluating the performance of the SR model, whether to verify only the Y channel image data
-only_test_y_channel = True
+only_test_y_channel = True # nej
 
 # Model arch config
 in_channels = 3
