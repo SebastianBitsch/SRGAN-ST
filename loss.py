@@ -36,7 +36,7 @@ class ContentLoss(nn.Module):
         self.device = device
 
         # Load the VGG19 model trained on the ImageNet dataset.
-        model = models.vgg19(weights=models.VGG19_Weights.IMAGENET1K_V1)
+        model = models.vgg19(weights=models.VGG19_Weights.IMAGENET1K_V1).to(device)
 
         # Extract the thirty-sixth layer output in the VGG19 model as the content loss.
         self.feature_extractor = create_feature_extractor(model, list(extraction_layers))
