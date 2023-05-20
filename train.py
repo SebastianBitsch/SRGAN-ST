@@ -14,115 +14,106 @@ from dataset import TrainImageDataset, TestImageDataset
 from image_quality_assessment import PSNR, SSIM
 from utils import load_state_dict, save_checkpoint, AverageMeter, ProgressMeter
 
-import srgan_config
+# import srgan_config
 from loss import ContentLoss
 
+from config import Config
+
+config = Config()
 
 # House keeping variables
 batches_done = 0
 best_psnr = 0.0
 best_ssim = 0.0
 
-
 # Define models
-discriminator = model.Discriminator().to(srgan_config.device)
-generator = model.Generator( # TODO: Pass entire config class instead of this mess
-    in_channels=srgan_config.in_channels,
-    out_channels=srgan_config.out_channels,
-    channels=srgan_config.channels,
-    num_rcb=srgan_config.num_rcb,
-    upscale_factor=srgan_config.upscale_factor
-).to(srgan_config.device)
+discriminator = model.Discriminator().to(config.MODEL.DEVICE)
+generator = model.Generator(config).to(config.MODEL.DEVICE)
 
 # Define losses
 adversarial_criterion = nn.BCEWithLogitsLoss()
-content_criterion = ContentLoss(srgan_config.feature_model_extractor_nodes, device=srgan_config.device)
+content_criterion = ContentLoss(config.MODEL.G_LOSS.VGG19_LAYERS, device=config.MODEL.DEVICE)
 pixel_criterion = nn.MSELoss() # Maybe use torch.nn.L1Loss().to(device) ?
 
 # Optimizers
 d_optimizer = optim.Adam(
-    discriminator.parameters(),
-    srgan_config.model_lr,
-    srgan_config.model_betas,
-    srgan_config.model_eps,
-    srgan_config.model_weight_decay
+    params = discriminator.parameters(),
+    lr     = config.SOLVER.D_BASE_LR,
+    betas  = (config.SOLVER.D_BETA1, config.SOLVER.D_BETA2),
+    eps    = config.SOLVER.D_EPS,
+    weight_decay = config.SOLVER.D_WEIGHT_DECAY
 )
 g_optimizer = optim.Adam(
-    generator.parameters(),
-    srgan_config.model_lr,
-    srgan_config.model_betas,
-    srgan_config.model_eps,
-    srgan_config.model_weight_decay
+    params = generator.parameters(),
+    lr     = config.SOLVER.G_BASE_LR,
+    betas  = (config.SOLVER.G_BETA1, config.SOLVER.G_BETA2),
+    eps    = config.SOLVER.G_EPS,
+    weight_decay = config.SOLVER.G_WEIGHT_DECAY
 )
 
 # Schedulers
 d_scheduler = lr_scheduler.StepLR(
-    d_optimizer,
-    srgan_config.lr_scheduler_step_size,
-    srgan_config.lr_scheduler_gamma
+    optimizer = d_optimizer,
+    step_size = config.SCHEDULER.STEP_SIZE,
+    gamma = config.SCHEDULER.GAMMA
 )
 g_scheduler = lr_scheduler.StepLR(
-    g_optimizer,
-    srgan_config.lr_scheduler_step_size,
-    srgan_config.lr_scheduler_gamma
+    optimizer = g_optimizer,
+    step_size = config.SCHEDULER.STEP_SIZE,
+    gamma = config.SCHEDULER.GAMMA
 )
 
 # Dataloaders
 # Load train, test and valid datasets
-train_datasets = TrainImageDataset(
-    srgan_config.train_gt_images_dir,
-    srgan_config.upscale_factor,
-)
-test_datasets = TestImageDataset(
-    srgan_config.test_gt_images_dir, 
-    srgan_config.test_lr_images_dir
-)
+train_datasets = TrainImageDataset(config.DATA.TRAIN_GT_IMAGES_DIR, config.DATA.UPSCALE_FACTOR)
+test_datasets = TestImageDataset(config.DATA.TEST_GT_IMAGES_DIR, config.DATA.TEST_LR_IMAGES_DIR)
 
 # Generator all dataloader
 train_dataloader = DataLoader(
-    train_datasets,
-    batch_size=srgan_config.batch_size,
-    shuffle=True,
-    num_workers=srgan_config.num_workers,
-    pin_memory=True,
-    drop_last=True,
-    persistent_workers=True,
+    dataset = train_datasets,
+    batch_size = config.DATA.BATCH_SIZE,
+    shuffle = True,
+    num_workers = 1,
+    pin_memory = True,
+    drop_last = True,
+    persistent_workers = True,
 )
 test_dataloader = DataLoader(
-    test_datasets,
-    batch_size=1,
-    shuffle=False,
-    num_workers=1,
-    pin_memory=True,
-    drop_last=False,
-    persistent_workers=True,
+    dataset = test_datasets,
+    batch_size = 1,
+    shuffle = False,
+    num_workers = 1,
+    pin_memory = True,
+    drop_last = False,
+    persistent_workers = True,
 )
 
 # Create an IQA evaluation model
-psnr_model = PSNR(srgan_config.upscale_factor, srgan_config.only_test_y_channel).to(device=srgan_config.device)
-ssim_model = SSIM(srgan_config.upscale_factor, srgan_config.only_test_y_channel).to(device=srgan_config.device)
+ssim_model = SSIM(config.DATA.UPSCALE_FACTOR, True).to(device=config.MODEL.DEVICE)
+psnr_model = PSNR(config.DATA.UPSCALE_FACTOR, True).to(device=config.MODEL.DEVICE)
 
 # Tensorboard writer to store train and test info
-writer = SummaryWriter(f"samples/logs/{srgan_config.exp_name}")
+writer = SummaryWriter(f"samples/logs/{config.EXP.NAME}")
 
 
-for epoch in range(srgan_config.start_epoch, srgan_config.n_epochs):
-
+for epoch in range(config.EXP.START_EPOCH, config.EXP.N_EPOCHS):
+    print("epoch",epoch)
     # ----------------
     #  Train
     # ----------------
     for batch_num, (gt, lr) in enumerate(train_dataloader):
+        print(batch_num)
 
         batches_done = epoch * len(train_dataloader) + batch_num
         
         # Transfer in-memory data to CUDA devices to speed up training
-        gt = gt.to(device=srgan_config.device, non_blocking=True)
-        lr = lr.to(device=srgan_config.device, non_blocking=True)
+        gt = gt.to(device=config.MODEL.DEVICE, non_blocking=True)
+        lr = lr.to(device=config.MODEL.DEVICE, non_blocking=True)
 
         # Set the real sample label to 1, and the false sample label to 0
         batch_size, _, height, width = gt.shape
-        real_label = torch.full([batch_size, 1], 1.0, dtype=gt.dtype, device=srgan_config.device)
-        fake_label = torch.full([batch_size, 1], 0.0, dtype=gt.dtype, device=srgan_config.device)
+        real_label = torch.full([batch_size, 1], 1.0, dtype=gt.dtype, device=config.MODEL.DEVICE)
+        fake_label = torch.full([batch_size, 1], 0.0, dtype=gt.dtype, device=config.MODEL.DEVICE)
 
         # ----------------
         #  Train Generator
@@ -134,13 +125,13 @@ for epoch in range(srgan_config.start_epoch, srgan_config.n_epochs):
         # Apply losses ? maybe just pixel
         pixel_loss = 1.0 * pixel_criterion(gt, sr)
 
-        if batches_done < srgan_config.n_warmup_batches:
+        if batches_done < config.EXP.N_WARMUP_BATCHES:
             # TODO: Still log some data etc. and go backwards on some loss?
             continue
     
         # Extract validity predictions from discriminator
         pred_gt = discriminator(gt)
-        pred_sr = discriminator(sr)
+        pred_sr = discriminator(sr).detach()
 
         adversarial_loss = 0.005 * adversarial_criterion(pred_sr - pred_gt.mean(0, keepdim=True), real_label)
         content_loss = 1.0 * content_criterion(gt, sr)
@@ -156,7 +147,7 @@ for epoch in range(srgan_config.start_epoch, srgan_config.n_epochs):
         d_optimizer.zero_grad()
 
         pred_gt = discriminator(gt)
-        pred_sr = discriminator(sr)
+        pred_sr = discriminator(sr.detach())
         
         # Calculate the classification score of the discriminator model for real samples
         loss_real = adversarial_criterion(pred_gt - pred_sr.mean(0, keepdim=True), real_label)
@@ -174,7 +165,7 @@ for epoch in range(srgan_config.start_epoch, srgan_config.n_epochs):
         # -------------
         #  Log Progress
         # -------------
-        if batches_done % srgan_config.train_logging_interval != 0:
+        if batches_done % config.LOG_TRAIN_PERIOD != 0:
             continue
         
         # Log to TensorBoard
@@ -191,7 +182,7 @@ for epoch in range(srgan_config.start_epoch, srgan_config.n_epochs):
             "[Epoch %d/%d] [Batch %d/%d] [D loss: %f] [G loss: %f, content: %f, adv: %f, pixel: %f]"
             % (
                 epoch + 1,
-                srgan_config.n_epochs,
+                config.EXP.N_EPOCHS,
                 batch_num,
                 len(train_dataloader),
                 d_loss.item(),
@@ -213,8 +204,8 @@ for epoch in range(srgan_config.start_epoch, srgan_config.n_epochs):
     with torch.no_grad():
         for batch_num, (gt, lr) in enumerate(test_dataloader):
             
-            gt = gt.to(device=srgan_config.device, non_blocking=True)
-            lr = lr.to(device=srgan_config.device, non_blocking=True)
+            gt = gt.to(device=config.MODEL.DEVICE, non_blocking=True)
+            lr = lr.to(device=config.MODEL.DEVICE, non_blocking=True)
 
             sr = generator(lr)
 
@@ -225,7 +216,7 @@ for epoch in range(srgan_config.start_epoch, srgan_config.n_epochs):
             avg_ssim += ssim
 
             # Print training log information
-            if batch_num % srgan_config.valid_print_frequency == 0:
+            if batch_num % config.LOG_VALIDATION_PERIOD == 0:
                 print(f"[Test: {batch_num+1}/{len(test_dataloader)}] [PSNR: {psnr}] [SSIM: {ssim}]")
             
         print("-----")
@@ -241,9 +232,9 @@ for epoch in range(srgan_config.start_epoch, srgan_config.n_epochs):
     #  Save best model
     # ----------------
     is_best = best_psnr < psnr and best_ssim < ssim
-    is_last = srgan_config.start_epoch + epoch == srgan_config.n_epochs - 1
+    is_last = config.EXP.START_EPOCH + epoch == config.EXP.N_EPOCHS - 1
 
-    results_dir = f"results/{srgan_config.exp_name}"
+    results_dir = f"results/{config.EXP.NAME}"
     os.makedirs(results_dir, exist_ok=True)
     if is_last:
         torch.save(generator.state_dict(), results_dir  + "/g_last.pth")

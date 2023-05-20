@@ -16,46 +16,41 @@ import torch
 from torch import Tensor
 from torch import nn
 
+from config import Config
 
 class Generator(nn.Module):
-    def __init__(
-            self,
-            in_channels: int,
-            out_channels: int,
-            channels: int,
-            num_rcb: int,
-            upscale_factor: int
-    ) -> None:
+    def __init__(self, config: Config) -> None:
         super(Generator, self).__init__()
+
         # Low frequency information extraction layer
         self.conv1 = nn.Sequential(
-            nn.Conv2d(in_channels, channels, (9, 9), (1, 1), (4, 4)),
+            nn.Conv2d(config.MODEL.G_IN_CHANNEL, config.MODEL.G_N_CHANNEL, (9, 9), (1, 1), (4, 4)),
             nn.PReLU(),
         )
 
         # High frequency information extraction block
         trunk = []
-        for _ in range(num_rcb):
-            trunk.append(_ResidualConvBlock(channels))
+        for _ in range(config.MODEL.G_N_RCB):
+            trunk.append(_ResidualConvBlock(config.MODEL.G_N_CHANNEL))
         self.trunk = nn.Sequential(*trunk)
 
         # High-frequency information linear fusion layer
         self.conv2 = nn.Sequential(
-            nn.Conv2d(channels, channels, (3, 3), (1, 1), (1, 1), bias=False),
-            nn.BatchNorm2d(channels),
+            nn.Conv2d(config.MODEL.G_N_CHANNEL, config.MODEL.G_N_CHANNEL, (3, 3), (1, 1), (1, 1), bias=False),
+            nn.BatchNorm2d(config.MODEL.G_N_CHANNEL),
         )
 
         # zoom block
         upsampling = []
-        if upscale_factor == 2 or upscale_factor == 4 or upscale_factor == 8:
-            for _ in range(int(math.log(upscale_factor, 2))):
-                upsampling.append(_UpsampleBlock(channels, 2))
-        elif upscale_factor == 3:
-            upsampling.append(_UpsampleBlock(channels, 3))
+        if config.DATA.UPSCALE_FACTOR == 2 or config.DATA.UPSCALE_FACTOR == 4 or config.DATA.UPSCALE_FACTOR == 8:
+            for _ in range(int(math.log(config.DATA.UPSCALE_FACTOR, 2))):
+                upsampling.append(_UpsampleBlock(config.MODEL.G_N_CHANNEL, 2))
+        elif config.DATA.UPSCALE_FACTOR == 3:
+            upsampling.append(_UpsampleBlock(config.MODEL.G_N_CHANNEL, 3))
         self.upsampling = nn.Sequential(*upsampling)
 
         # reconstruction block
-        self.conv3 = nn.Conv2d(channels, out_channels, (9, 9), (1, 1), (4, 4))
+        self.conv3 = nn.Conv2d(config.MODEL.G_N_CHANNEL, config.MODEL.G_OUT_CHANNEL, (9, 9), (1, 1), (4, 4))
 
         # Initialize neural network weights
         self._initialize_weights()

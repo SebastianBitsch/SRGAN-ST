@@ -14,3 +14,5 @@ samples
 
 .DS_Store
 .png
+
+train_legacy.py

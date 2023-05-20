@@ -1,12 +1,13 @@
 #!/bin/bash
 
 ### -- set the job Name -- 
-#BSUB -J Train-SRGAN-ST[1-1]%1
+#BSUB -J TRAIN-SRGAN-ST[1-1]%1
 
 ### -- Specify the output and error file. %J is the job-id --
 ### -- -o and -e mean append, -oo and -eo mean overwrite --
-#BSUB -o logs/log_train_gramloss_%J.out
-#BSUB -e logs/log_train_gramloss_%J.err
+
+#BSUB -o logs/train_%J.out
+#BSUB -e logs/train_%J.err
 # -- end of LSF options --
 
 ### -- specify queue -- 
@@ -34,24 +35,42 @@
 ### -- send notification at completion--
 ##BSUB -N
 
-nvidia-smi
+nvidia-smi 
 
-exp_names=("bbgan-sh" "srgan-sh" "gramgan-sh")
-model_names=("bbgan" "srgan" "gramgan")
-
-num_epochs=1
-
-job_index=$((LSB_JOBINDEX-1))
-
-
-name=${exp_names[$job_index]}
-model=${model_names[$job_index]}
+export job_index=$((LSB_JOBINDEX-1))
 
 source .env/bin/activate
-python train.py -exp_name=$name -model_name=$model -epochs=$num_epochs
+python3
 
-# Delete the sample directory afterwards
-rm -fr samples/$name
+import os
+from config import Config
+from train import Train
 
-# Move the results to scratch
-mv /zhome/c9/c/156514/SRGAN-ST/results/$name /work3/s204163/
+job_index = os.getenv('jobindex')
+print(job_index)
+# config = Config()
+
+# Change config variables
+
+train()
+# train(config)
+
+# exp_names=("bbgan-sh" "srgan-sh" "gramgan-sh")
+# model_names=("bbgan" "srgan" "gramgan")
+
+# num_epochs=2
+
+# job_index=$((LSB_JOBINDEX-1))
+
+
+# name=${exp_names[$job_index]}
+# model=${model_names[$job_index]}
+
+
+# python train.py -exp_name=$name -model_name=$model -epochs=$num_epochs
+
+# # These steps could be avoided by just saving to the right dir directly tbh
+# # Delete the sample directory afterwards
+# rm -fr samples/$name
+# # Move the results to scratch
+# mv /zhome/c9/c/156514/SRGAN-ST/results/$name /work3/s204163/
