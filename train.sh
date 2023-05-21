@@ -35,42 +35,40 @@
 ### -- send notification at completion--
 ##BSUB -N
 
-nvidia-smi 
-
 export job_index=$((LSB_JOBINDEX-1))
 
+nvidia-smi 
+
 source .env/bin/activate
-python3
+python3 main.py
 
-import os
-from config import Config
-from train import Train
-
-job_index = os.getenv('jobindex')
-print(job_index)
-# config = Config()
+#TODO: Move results to scratch
+# # # Delete the sample directory afterwards
+# # rm -fr samples/$name
+# # # Move the results to scratch
+# # mv /zhome/c9/c/156514/SRGAN-ST/results/$name /work3/s204163/
 
 # Change config variables
 
-train()
-# train(config)
+# train()
+# # train(config)
 
-# exp_names=("bbgan-sh" "srgan-sh" "gramgan-sh")
-# model_names=("bbgan" "srgan" "gramgan")
+# # exp_names=("bbgan-sh" "srgan-sh" "gramgan-sh")
+# # model_names=("bbgan" "srgan" "gramgan")
 
-# num_epochs=2
+# # num_epochs=2
 
-# job_index=$((LSB_JOBINDEX-1))
-
-
-# name=${exp_names[$job_index]}
-# model=${model_names[$job_index]}
+# # job_index=$((LSB_JOBINDEX-1))
 
 
-# python train.py -exp_name=$name -model_name=$model -epochs=$num_epochs
+# # name=${exp_names[$job_index]}
+# # model=${model_names[$job_index]}
 
-# # These steps could be avoided by just saving to the right dir directly tbh
-# # Delete the sample directory afterwards
-# rm -fr samples/$name
-# # Move the results to scratch
-# mv /zhome/c9/c/156514/SRGAN-ST/results/$name /work3/s204163/
+
+# # python train.py -exp_name=$name -model_name=$model -epochs=$num_epochs
+
+# # # These steps could be avoided by just saving to the right dir directly tbh
+# # # Delete the sample directory afterwards
+# # rm -fr samples/$name
+# # # Move the results to scratch
+# # mv /zhome/c9/c/156514/SRGAN-ST/results/$name /work3/s204163/
