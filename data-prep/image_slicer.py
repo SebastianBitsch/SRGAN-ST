@@ -6,6 +6,7 @@ import cv2
 import numpy as np
 from tqdm import tqdm
 
+from config import Config
 
 def main(args) -> None:
     os.makedirs(args.output_dir, exist_ok=True)
@@ -50,6 +51,8 @@ def worker(image_file_name:str, args:dict) -> None:
 
 
 if __name__ == "__main__":
+    config = Config()
+
     parser = argparse.ArgumentParser(
         description="""
             Slice a directory of images to sub-images of a given size. We use this to generate our HR images.
@@ -62,8 +65,8 @@ if __name__ == "__main__":
     )
     parser.add_argument("--input_dir", type=str, default="/work3/s204163/data/ImageNet/original")
     parser.add_argument("--output_dir", type=str, default="/work3/s204163/data/ImageNet/train")
-    parser.add_argument("--output_size", type=int, default=48*4)
-    parser.add_argument("--step_size", type=int, default=48*4)
+    parser.add_argument("--output_size", type=int, default=config.DATA.GT_IMAGE_SIZE)
+    parser.add_argument("--step_size", type=int, default=config.DATA.GT_IMAGE_SIZE)
     parser.add_argument("--num_workers", type=int, default=16)
     args = parser.parse_args()
 
