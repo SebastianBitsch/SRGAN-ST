@@ -1,3 +1,5 @@
+from dataclasses import dataclass
+
 from torch import nn
 
 from loss import ContentLoss
@@ -13,13 +15,14 @@ class dotdict(dict):
     __delattr__ = dict.__delitem__
     __dir__ = dict.keys
 
+@dataclass
 class Config:
-
     EXP = dotdict()
-    EXP.NAME = "warmup-experiment1"
-    EXP.START_EPOCH = 0         # Whether to resume training at some epoch number or start at epoch 0
-    EXP.N_EPOCHS = 30           # Number of epochs to train for
-    EXP.N_WARMUP_EPOCHS = 10    # Number of epochs to warm up the generator before the discriminator starts learning
+    EXP.NAME = "experiment-name"
+    EXP.START_EPOCH = 0             # Whether to resume training at some epoch number or start at epoch 0
+    EXP.N_EPOCHS = 20               # Number of epochs to train for
+    EXP.N_WARMUP_BATCHES = 0        # Number of epochs to warm up the generator before the discriminator starts learning
+    EXP.LABEL_SMOOTHING = 0.0       # One-sided label smoothing. The true label will be 1.0 - label_smoothing
 
     # Logging options
     LOG_TRAIN_PERIOD = 100
@@ -54,7 +57,7 @@ class Config:
         "Pixel"       : nn.MSELoss(),
     }
     MODEL.G_LOSS.CRITERION_WEIGHTS = {  # How to weigh the loss functions used in the generator
-        "Adversarial" : 0.05,
+        "Adversarial" : 0.005,
         "Content"     : 1.0,
         "Pixel"       : 1.0,
     }
