@@ -99,50 +99,55 @@ def train(config: Config = None):
     ssim_model = SSIM(config.DATA.UPSCALE_FACTOR, True).to(device=config.MODEL.DEVICE)
     psnr_model = PSNR(config.DATA.UPSCALE_FACTOR, True).to(device=config.MODEL.DEVICE)
 
-    # Tensorboard writer to store train and test info
+    # Init Tensorboard writer to store train and test info
+    # also save the config used in this run to Tensorboard
     writer = SummaryWriter(f"samples/logs/{config.EXP.NAME}")
-
+    writer.add_text("Config", config)
 
     for epoch in range(config.EXP.START_EPOCH, config.EXP.N_EPOCHS):
+        print(f"Beginning train epoch: {epoch+1}")
+
         # ----------------
         #  Train
         # ----------------
-        for batch_num, (gt, lr) in enumerate(train_dataloader):
-
-            batches_done = epoch * len(train_dataloader) + batch_num
+        discriminator.train()
+        generator.train()
             
+        for batch_num, (gt, lr) in enumerate(train_dataloader):
+            batches_done += 1
+
             # Transfer in-memory data to CUDA devices to speed up training
             gt = gt.to(device=config.MODEL.DEVICE, non_blocking=True)
             lr = lr.to(device=config.MODEL.DEVICE, non_blocking=True)
 
             # Set the real sample label to 1, and the false sample label to 0
             batch_size, _, height, width = gt.shape
-            real_label = torch.full([batch_size, 1], 0.9, dtype=gt.dtype, device=config.MODEL.DEVICE)
+            real_label = torch.full([batch_size, 1], 1.0 - config.EXP.LABEL_SMOOTHING, dtype=gt.dtype, device=config.MODEL.DEVICE)
             fake_label = torch.full([batch_size, 1], 0.0, dtype=gt.dtype, device=config.MODEL.DEVICE)
 
             # ----------------
             #  Train Generator
             # ----------------
             g_optimizer.zero_grad()
+            generator.zero_grad()
 
             sr = generator(lr)
 
-            # Apply losses ? maybe just pixel
+            # Apply losses ? maybe just pixel TODO: Add weighting
             pixel_loss = 1.0 * pixel_criterion(gt, sr)
 
-            if epoch < config.EXP.N_WARMUP_EPOCHS:
+            if batches_done < config.EXP.N_WARMUP_BATCHES:
                 pixel_loss.backward()
                 g_optimizer.step()
-                if batches_done % config.LOG_TRAIN_PERIOD != 0:
-                    continue
-                print("[Epoch %d/%d] [Batch %d/%d] [G pixel: %f]" % (epoch, config.EXP.N_EPOCHS, batch_num, len(train_dataloader), pixel_loss.item()))
+                if batch_num % config.LOG_TRAIN_PERIOD == 0:
+                    print("[Epoch %d/%d] [Batch %d/%d] [G pixel: %f]" % (epoch + 1, config.EXP.N_EPOCHS, batch_num, len(train_dataloader), pixel_loss.item()))
                 continue
-        
+                    
             # Extract validity predictions from discriminator
             pred_gt = discriminator(gt)
             pred_sr = discriminator(sr).detach()
 
-            adversarial_loss = adversarial_criterion(pred_sr - pred_gt.mean(0, keepdim=True), real_label) * config.MODEL.G_LOSS.CRITERION_WEIGHTS['Adversarial']
+            adversarial_loss = 0.005 * adversarial_criterion(pred_sr - pred_gt.mean(0, keepdim=True), real_label)# * config.MODEL.G_LOSS.CRITERION_WEIGHTS['Adversarial']
             content_loss = 1.0 * content_criterion(gt, sr)
 
             g_loss = content_loss + pixel_loss + adversarial_loss # TODO: Add weighting
@@ -154,15 +159,16 @@ def train(config: Config = None):
             #  Train Discriminator
             # --------------------
             d_optimizer.zero_grad()
+            discriminator.zero_grad()
 
             pred_gt = discriminator(gt)
             pred_sr = discriminator(sr.detach())
             
             # Calculate the classification score of the discriminator model for real samples
-            loss_real = adversarial_criterion(pred_gt - pred_sr.mean(0, keepdim=True), real_label)
-            loss_fake = adversarial_criterion(pred_sr - pred_gt.mean(0, keepdim=True), fake_label)
+            loss_real = 0.5 * adversarial_criterion(pred_gt - pred_sr.mean(0, keepdim=True), real_label)
+            loss_fake = 0.5 * adversarial_criterion(pred_sr - pred_gt.mean(0, keepdim=True), fake_label)
             
-            d_loss = (loss_real + loss_fake) / 2
+            d_loss = loss_real + loss_fake
             d_loss.backward()
             d_optimizer.step()
 
@@ -174,9 +180,9 @@ def train(config: Config = None):
             # -------------
             #  Log Progress
             # -------------
-            if batches_done % config.LOG_TRAIN_PERIOD != 0:
+            if batch_num % config.LOG_TRAIN_PERIOD != 0:
                 continue
-            
+        
             # Log to TensorBoard
             writer.add_scalar("Train/D_Loss", d_loss.item(), batches_done)
             writer.add_scalar("Train/G_Loss", g_loss.item(), batches_done)
@@ -202,7 +208,10 @@ def train(config: Config = None):
                 )
             )
 
-
+        # Dont do validating if we are warming up
+        if batches_done < config.EXP.N_WARMUP_BATCHES:
+            continue
+        print("validating!")
         # ----------------
         #  Validate
         # ----------------

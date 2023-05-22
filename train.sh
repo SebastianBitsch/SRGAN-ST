@@ -6,8 +6,8 @@
 ### -- Specify the output and error file. %J is the job-id --
 ### -- -o and -e mean append, -oo and -eo mean overwrite --
 
-#BSUB -o logs/train_%J.out
-#BSUB -e logs/train_%J.err
+#BSUB -o logs/train1_%J.out
+#BSUB -e logs/train1_%J.err
 # -- end of LSF options --
 
 ### -- specify queue -- 
@@ -42,33 +42,8 @@ nvidia-smi
 source .env/bin/activate
 python3 main.py
 
-#TODO: Move results to scratch
-# # # Delete the sample directory afterwards
-# # rm -fr samples/$name
-# # # Move the results to scratch
-# # mv /zhome/c9/c/156514/SRGAN-ST/results/$name /work3/s204163/
-
-# Change config variables
-
-# train()
-# # train(config)
-
-# # exp_names=("bbgan-sh" "srgan-sh" "gramgan-sh")
-# # model_names=("bbgan" "srgan" "gramgan")
-
-# # num_epochs=2
-
-# # job_index=$((LSB_JOBINDEX-1))
-
-
-# # name=${exp_names[$job_index]}
-# # model=${model_names[$job_index]}
-
-
-# # python train.py -exp_name=$name -model_name=$model -epochs=$num_epochs
-
-# # # These steps could be avoided by just saving to the right dir directly tbh
-# # # Delete the sample directory afterwards
-# # rm -fr samples/$name
-# # # Move the results to scratch
-# # mv /zhome/c9/c/156514/SRGAN-ST/results/$name /work3/s204163/
+# TODO: Move results to scratch
+# # Delete the sample directory afterwards
+# rm -fr samples/$name
+# # Move the results to scratch
+# mv /zhome/c9/c/156514/SRGAN-ST/results/$name /work3/s204163/

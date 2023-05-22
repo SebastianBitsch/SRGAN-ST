@@ -126,13 +126,9 @@ class Discriminator(nn.Module):
         )
 
     def forward(self, x: Tensor) -> Tensor:
-        # Input image size must equal 96
-        # assert x.shape[2] == 96 and x.shape[3] == 96, "Image shape must equal 96x96"
-
         out = self.features(x)
         out = torch.flatten(out, 1)
         out = self.classifier(out)
-
         return out
 
 
