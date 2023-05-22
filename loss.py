@@ -17,7 +17,6 @@ class ContentLoss(nn.Module):
         -`Photo-Realistic Single Image Super-Resolution Using a Generative Adversarial Network <https://arxiv.org/pdf/1609.04802.pdf>` paper.
         -`ESRGAN: Enhanced Super-Resolution Generative Adversarial Networks                    <https://arxiv.org/pdf/1809.00219.pdf>` paper.
         -`Perceptual Extreme Super Resolution Network with Receptive Field Block               <https://arxiv.org/pdf/2005.12597.pdf>` paper.
-
      """
 
     def __init__(self, extraction_layers: dict[str, float], device) -> None:
@@ -85,11 +84,71 @@ class EuclidLoss(nn.Module):
 
         return loss
 
+def batch_pairwise_distance(x, y=None, dist_norm = 'l1'):
+    '''
+    Input: x is a BxNxd matrix
+            y is an optional BxMxd matirx
+    Output: dist is a BxNxM matrix where dist[b,i,j] is the square norm between x[b,i,:] and y[b,j,:]
+            if y is not given then use 'y=x'.
+    i.e. dist[b,i,j] = ||x[b,i,:]-y[b,j,:]||^2
+    '''
+    B, N, d = x.size()
+    if dist_norm == 'l1':
+        x_norm = x.view(B, N, 1, d)
+        if y is not None:
+            y_norm = y.view(B, 1, -1, d)
+        else:
+            y_norm = x.view(B, 1, -1, d)
+        dist = torch.abs(x_norm - y_norm).sum(dim=3)
+    elif dist_norm == 'l2':
+        x_norm = (x ** 2).sum(dim=2).view(B, N, 1)
+        if y is not None:
+            M = y.size(1)
+            y_t = torch.transpose(y, 1, 2)
+            y_norm = (y ** 2).sum(dim=2).view(B, 1, M)
+        else:
+            y_t = torch.transpose(x, 1, 2)
+            y_norm = x_norm.view(B, 1, N)
 
-class BBLoss(nn.Module):
+        dist = x_norm + y_norm - 2.0 * torch.bmm(x, y_t)
+        # Ensure diagonal is zero if x=y
+        if y is None:
+            dist = dist - torch.diag_embed(torch.diagonal(dist, dim1=-2, dim2=-1), dim1=-2, dim2=-1)
+        dist = torch.clamp(dist, 0.0, np.inf)
+        # dist = torch.sqrt(torch.clamp(dist, 0.0, np.inf) / d)
+    else:
+        raise NotImplementedError('%s norm has not been supported.' % dist_norm)
+
+    return dist
+
+def pairwise_distance(x, y=None):
+    '''
+    Input: x is a Nxd matrix
+            y is an optional Mxd matirx
+    Output: dist is a BxNxM matrix where dist[i,j] is the square norm between x[i,:] and y[j,:]
+            if y is not given then use 'y=x'.
+    i.e. dist[i,j] = ||x[i,:]-y[j,:]||^2
+    '''
+    x_norm = (x ** 2).sum(1).view(-1, 1)
+    if y is not None:
+        y_t = torch.transpose(y, 0, 1)
+        y_norm = (y ** 2).sum(1).view(1, -1)
+    else:
+        y_t = torch.transpose(x, 0, 1)
+        y_norm = x_norm.view(1, -1)
+
+    dist = x_norm + y_norm - 2.0 * torch.mm(x, y_t)
+    # Ensure diagonal is zero if x=y
+    if y is None:
+        dist = dist - torch.diag(dist.diag())
+
+    return torch.clamp(dist, 0.0, np.inf)
+
+
+class BestBuddyLoss(nn.Module):
     """ https://github.com/dvlab-research/Simple-SR/blob/08c71e9e46ba781df50893f0476ecd0fc004aa45/utils/loss.py#L54 """
     def __init__(self, alpha=1.0, beta=1.0, ksize=3, pad=0, stride=3, dist_norm='l2', criterion='l1'):
-        super(BBLoss, self).__init__()
+        super(BestBuddyLoss, self).__init__()
         self.alpha = alpha
         self.beta = beta
         self.ksize = ksize
@@ -103,66 +162,6 @@ class BBLoss(nn.Module):
             self.criterion = torch.nn.L2loss(reduction='mean')
         else:
             raise NotImplementedError('%s criterion has not been supported.' % criterion)
-
-    def pairwise_distance(self, x, y=None):
-        '''
-        Input: x is a Nxd matrix
-               y is an optional Mxd matirx
-        Output: dist is a BxNxM matrix where dist[i,j] is the square norm between x[i,:] and y[j,:]
-                if y is not given then use 'y=x'.
-        i.e. dist[i,j] = ||x[i,:]-y[j,:]||^2
-        '''
-        x_norm = (x ** 2).sum(1).view(-1, 1)
-        if y is not None:
-            y_t = torch.transpose(y, 0, 1)
-            y_norm = (y ** 2).sum(1).view(1, -1)
-        else:
-            y_t = torch.transpose(x, 0, 1)
-            y_norm = x_norm.view(1, -1)
-
-        dist = x_norm + y_norm - 2.0 * torch.mm(x, y_t)
-        # Ensure diagonal is zero if x=y
-        if y is None:
-            dist = dist - torch.diag(dist.diag())
-
-        return torch.clamp(dist, 0.0, np.inf)
-
-    def batch_pairwise_distance(self, x, y=None):
-        '''
-        Input: x is a BxNxd matrix
-               y is an optional BxMxd matirx
-        Output: dist is a BxNxM matrix where dist[b,i,j] is the square norm between x[b,i,:] and y[b,j,:]
-                if y is not given then use 'y=x'.
-        i.e. dist[b,i,j] = ||x[b,i,:]-y[b,j,:]||^2
-        '''
-        B, N, d = x.size()
-        if self.dist_norm == 'l1':
-            x_norm = x.view(B, N, 1, d)
-            if y is not None:
-                y_norm = y.view(B, 1, -1, d)
-            else:
-                y_norm = x.view(B, 1, -1, d)
-            dist = torch.abs(x_norm - y_norm).sum(dim=3)
-        elif self.dist_norm == 'l2':
-            x_norm = (x ** 2).sum(dim=2).view(B, N, 1)
-            if y is not None:
-                M = y.size(1)
-                y_t = torch.transpose(y, 1, 2)
-                y_norm = (y ** 2).sum(dim=2).view(B, 1, M)
-            else:
-                y_t = torch.transpose(x, 1, 2)
-                y_norm = x_norm.view(B, 1, N)
-
-            dist = x_norm + y_norm - 2.0 * torch.bmm(x, y_t)
-            # Ensure diagonal is zero if x=y
-            if y is None:
-                dist = dist - torch.diag_embed(torch.diagonal(dist, dim1=-2, dim2=-1), dim1=-2, dim2=-1)
-            dist = torch.clamp(dist, 0.0, np.inf)
-            # dist = torch.sqrt(torch.clamp(dist, 0.0, np.inf) / d)
-        else:
-            raise NotImplementedError('%s norm has not been supported.' % self.dist_norm)
-
-        return dist
 
     def forward(self, x, gt):
         p1 = F.unfold(x, kernel_size=self.ksize, padding=self.pad, stride=self.stride)
@@ -181,8 +180,8 @@ class BBLoss(nn.Module):
         p2_4 = p2_4.permute(0, 2, 1).contiguous() # [B, H, C]
         p2_cat = torch.cat([p2, p2_2, p2_4], 1)
 
-        score1 = self.alpha * self.batch_pairwise_distance(p1, p2_cat)
-        score = score1 + self.beta * self.batch_pairwise_distance(p2, p2_cat) # [B, H, H]
+        score1 = self.alpha * batch_pairwise_distance(p1, p2_cat, self.dist_norm)
+        score = score1 + self.beta * batch_pairwise_distance(p2, p2_cat, self.dist_norm) # [B, H, H]
 
         weight, ind = torch.min(score, dim=2) # [B, H]
         index = ind.unsqueeze(-1).expand([-1, -1, C]) # [B, H, C]
@@ -194,138 +193,138 @@ class BBLoss(nn.Module):
 
 
 
-class GBBLoss(BBLoss):
+# class GBBLoss():
 
-    def __init__(self, alpha=1, beta=1, ksize=3, pad=0, stride=3, dist_norm='l2', criterion='l1'):
-        super().__init__(alpha, beta, ksize, pad, stride, dist_norm, criterion)
+#     def __init__(self, alpha=1, beta=1, ksize=3, pad=0, stride=3, dist_norm='l2', criterion='l1'):
+#         super().__init__(alpha, beta, ksize, pad, stride, dist_norm, criterion)
 
-    def gram_mat(self, x):
-        """
-        Computes the gram matrix
+#     def gram_mat(self, x):
+#         """
+#         Computes the gram matrix
 
-        in: torch.Size([16, 3, 96, 96])
-        out: torch.Size([16, 3, 3])
-        """
-        n, c, h, w = x.size()
-        features = x.view(n, c, w * h)
-        features_t = features.transpose(1, 2)
-        gram = features.bmm(features_t) / (c * h * w)
-        return gram
+#         in: torch.Size([16, 3, 96, 96])
+#         out: torch.Size([16, 3, 3])
+#         """
+#         n, c, h, w = x.size()
+#         features = x.view(n, c, w * h)
+#         features_t = features.transpose(1, 2)
+#         gram = features.bmm(features_t) / (c * h * w)
+#         return gram
 
-    def forward(self, x, gt):
-        """ https://github.com/dvlab-research/Simple-SR/blob/master/utils/loss.py#L94 """
-        # x and gt: torch.Size([16, 3, 96, 96])
+#     def forward(self, x, gt):
+#         """ https://github.com/dvlab-research/Simple-SR/blob/master/utils/loss.py#L94 """
+#         # x and gt: torch.Size([16, 3, 96, 96])
 
-        # Get the gram matrix of the estimated
-        #  patch and calculate the candidate patches
-        g_x = self.gram_mat(x)
+#         # Get the gram matrix of the estimated
+#         #  patch and calculate the candidate patches
+#         g_x = self.gram_mat(x)
         
-        g_gt = self.gram_mat(gt)
-        g_gt2 = self.gram_mat(F.interpolate(gt, scale_factor=1/2, mode="bicubic"))
-        g_gt4 = self.gram_mat(F.interpolate(gt, scale_factor=1/4, mode="bicubic"))
-        # TODO: Calculate more candidate patches by affine transformations
+#         g_gt = self.gram_mat(gt)
+#         g_gt2 = self.gram_mat(F.interpolate(gt, scale_factor=1/2, mode="bicubic"))
+#         g_gt4 = self.gram_mat(F.interpolate(gt, scale_factor=1/4, mode="bicubic"))
+#         # TODO: Calculate more candidate patches by affine transformations
 
-        # Combine all candidates
-        gt_cat = torch.cat([g_gt, g_gt2, g_gt4], 1) # torch.Size([16, 9, 3])
+#         # Combine all candidates
+#         gt_cat = torch.cat([g_gt, g_gt2, g_gt4], 1) # torch.Size([16, 9, 3])
 
-        # Use Eq. 2
-        score_a = self.alpha * self.batch_pairwise_distance(g_gt, gt_cat)
-        score_b = self.beta * self.batch_pairwise_distance(g_x, gt_cat)
-        score = score_a + score_b
+#         # Use Eq. 2
+#         score_a = self.alpha * self.batch_pairwise_distance(g_gt, gt_cat)
+#         score_b = self.beta * self.batch_pairwise_distance(g_x, gt_cat)
+#         score = score_a + score_b
 
-        # Complicated way of taking argmin to get the best patch
-        weight, ind = torch.min(score, dim=2) # [B, H]
-        index = ind.unsqueeze(-1).expand([-1, -1, 3]) 
-        best_patch = torch.gather(gt_cat, dim=1, index=index) # torch.Size([16, 3, 3])
+#         # Complicated way of taking argmin to get the best patch
+#         weight, ind = torch.min(score, dim=2) # [B, H]
+#         index = ind.unsqueeze(-1).expand([-1, -1, 3]) 
+#         best_patch = torch.gather(gt_cat, dim=1, index=index) # torch.Size([16, 3, 3])
 
-        # Use Eq. 4
-        loss = self.criterion(g_x, best_patch)
+#         # Use Eq. 4
+#         loss = self.criterion(g_x, best_patch)
 
-        return loss
+#         return loss
 
-
-class STLoss(BBLoss):
-
-    def __init__(self, alpha=1, beta=1, ksize=3, pad=0, stride=3, dist_norm='l2', criterion='l1'):
-        super().__init__(alpha, beta, ksize, pad, stride, dist_norm, criterion)
-
-    def st_mat(self, x):
-        """
-        Computes the gram matrix
-
-        in: torch.Size([16, 3, 96, 96])
-        out: torch.Size([16, 3, 3])
-        """
-        n, c, h, w = x.size()
-        features = x.view(n, c, w * h)
-        features_t = features.transpose(1, 2)
-        gram = features.bmm(features_t) / (c * h * w)
-        return gram
-
-    def forward(self, x, gt):
-        """ https://github.com/dvlab-research/Simple-SR/blob/master/utils/loss.py#L94 """
-        # x and gt: torch.Size([16, 3, 96, 96])
-
-        # Get the gram matrix of the estimated patch and calculate the candidate patches
-        g_x = self.st_mat(x)
-        g_gt = self.st_mat(gt)
-        g_gt2 = self.st_mat(F.interpolate(gt, scale_factor=1/2, mode="bicubic"))
-        g_gt4 = self.st_mat(F.interpolate(gt, scale_factor=1/4, mode="bicubic"))
-        # TODO: Calculate more candidate patches by affine transformations
-
-        # Combine all candidates
-        gt_cat = torch.cat([g_gt, g_gt2, g_gt4], 1) # torch.Size([16, 9, 3])
-
-        # Use Eq. 2
-        score_a = self.alpha * self.batch_pairwise_distance(g_gt, gt_cat)
-        score_b = self.beta * self.batch_pairwise_distance(g_x, gt_cat)
-        score = score_a + score_b
-
-        # Complicated way of taking argmin to get the best patch
-        weight, ind = torch.min(score, dim=2) # [B, H]
-        index = ind.unsqueeze(-1).expand([-1, -1, 3]) 
-        best_patch = torch.gather(gt_cat, dim=1, index=index) # torch.Size([16, 3, 3])
-
-        # Use Eq. 4
-        loss = self.criterion(g_x, best_patch)
-
-        return loss
 
 # class STLoss(BBLoss):
 
 #     def __init__(self, alpha=1, beta=1, ksize=3, pad=0, stride=3, dist_norm='l2', criterion='l1'):
-        
-
 #         super().__init__(alpha, beta, ksize, pad, stride, dist_norm, criterion)
 
+#     def st_mat(self, x):
+#         """
+#         Computes the gram matrix
+
+#         in: torch.Size([16, 3, 96, 96])
+#         out: torch.Size([16, 3, 3])
+#         """
+#         n, c, h, w = x.size()
+#         features = x.view(n, c, w * h)
+#         features_t = features.transpose(1, 2)
+#         gram = features.bmm(features_t) / (c * h * w)
+#         return gram
+
 #     def forward(self, x, gt):
-#         p1 = F.unfold(x, kernel_size=self.ksize, padding=self.pad, stride=self.stride)
-#         B, C, H = p1.size()
-#         p1 = p1.permute(0, 2, 1).contiguous() # [B, H, C]
+#         """ https://github.com/dvlab-research/Simple-SR/blob/master/utils/loss.py#L94 """
+#         # x and gt: torch.Size([16, 3, 96, 96])
 
-#         p2 = F.unfold(gt, kernel_size=self.ksize, padding=self.pad, stride=self.stride)
-#         p2 = p2.permute(0, 2, 1).contiguous() # [B, H, C]
+#         # Get the gram matrix of the estimated patch and calculate the candidate patches
+#         g_x = self.st_mat(x)
+#         g_gt = self.st_mat(gt)
+#         g_gt2 = self.st_mat(F.interpolate(gt, scale_factor=1/2, mode="bicubic"))
+#         g_gt4 = self.st_mat(F.interpolate(gt, scale_factor=1/4, mode="bicubic"))
+#         # TODO: Calculate more candidate patches by affine transformations
 
-#         gt_2 = F.interpolate(gt, scale_factor=0.5, mode='bicubic', align_corners = False)
-#         p2_2 = F.unfold(gt_2, kernel_size=self.ksize, padding=self.pad, stride=self.stride)
-#         p2_2 = p2_2.permute(0, 2, 1).contiguous() # [B, H, C]
+#         # Combine all candidates
+#         gt_cat = torch.cat([g_gt, g_gt2, g_gt4], 1) # torch.Size([16, 9, 3])
 
-#         gt_4 = F.interpolate(gt, scale_factor=0.25, mode='bicubic',align_corners = False)
-#         p2_4 = F.unfold(gt_4, kernel_size=self.ksize, padding=self.pad, stride=self.stride)
-#         p2_4 = p2_4.permute(0, 2, 1).contiguous() # [B, H, C]
-#         p2_cat = torch.cat([p2, p2_2, p2_4], 1)
-        
-#         p1 = 
-#         p2 = 
-#         p2_cat = 
+#         # Use Eq. 2
+#         score_a = self.alpha * self.batch_pairwise_distance(g_gt, gt_cat)
+#         score_b = self.beta * self.batch_pairwise_distance(g_x, gt_cat)
+#         score = score_a + score_b
 
-#         score1 = self.alpha * self.batch_pairwise_distance(p1, p2_cat)
-#         score = score1 + self.beta * self.batch_pairwise_distance(p2, p2_cat) # [B, H, H]
-
+#         # Complicated way of taking argmin to get the best patch
 #         weight, ind = torch.min(score, dim=2) # [B, H]
-#         index = ind.unsqueeze(-1).expand([-1, -1, C]) # [B, H, C]
-#         sel_p2 = torch.gather(p2_cat, dim=1, index=index) # [B, H, C]
+#         index = ind.unsqueeze(-1).expand([-1, -1, 3]) 
+#         best_patch = torch.gather(gt_cat, dim=1, index=index) # torch.Size([16, 3, 3])
 
-#         loss = self.criterion(p1, sel_p2)
+#         # Use Eq. 4
+#         loss = self.criterion(g_x, best_patch)
 
 #         return loss
+
+# # class STLoss(BBLoss):
+
+# #     def __init__(self, alpha=1, beta=1, ksize=3, pad=0, stride=3, dist_norm='l2', criterion='l1'):
+        
+
+# #         super().__init__(alpha, beta, ksize, pad, stride, dist_norm, criterion)
+
+# #     def forward(self, x, gt):
+# #         p1 = F.unfold(x, kernel_size=self.ksize, padding=self.pad, stride=self.stride)
+# #         B, C, H = p1.size()
+# #         p1 = p1.permute(0, 2, 1).contiguous() # [B, H, C]
+
+# #         p2 = F.unfold(gt, kernel_size=self.ksize, padding=self.pad, stride=self.stride)
+# #         p2 = p2.permute(0, 2, 1).contiguous() # [B, H, C]
+
+# #         gt_2 = F.interpolate(gt, scale_factor=0.5, mode='bicubic', align_corners = False)
+# #         p2_2 = F.unfold(gt_2, kernel_size=self.ksize, padding=self.pad, stride=self.stride)
+# #         p2_2 = p2_2.permute(0, 2, 1).contiguous() # [B, H, C]
+
+# #         gt_4 = F.interpolate(gt, scale_factor=0.25, mode='bicubic',align_corners = False)
+# #         p2_4 = F.unfold(gt_4, kernel_size=self.ksize, padding=self.pad, stride=self.stride)
+# #         p2_4 = p2_4.permute(0, 2, 1).contiguous() # [B, H, C]
+# #         p2_cat = torch.cat([p2, p2_2, p2_4], 1)
+        
+# #         p1 = 
+# #         p2 = 
+# #         p2_cat = 
+
+# #         score1 = self.alpha * self.batch_pairwise_distance(p1, p2_cat)
+# #         score = score1 + self.beta * self.batch_pairwise_distance(p2, p2_cat) # [B, H, H]
+
+# #         weight, ind = torch.min(score, dim=2) # [B, H]
+# #         index = ind.unsqueeze(-1).expand([-1, -1, C]) # [B, H, C]
+# #         sel_p2 = torch.gather(p2_cat, dim=1, index=index) # [B, H, C]
+
+# #         loss = self.criterion(p1, sel_p2)
+
+# #         return loss
