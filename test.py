@@ -23,7 +23,10 @@ from image_quality_assessment import PSNR, SSIM
 
 from config import Config
 
-def test(config: Config, g_path: str) -> None:
+def test(config: Config, g_path: str = None) -> None:
+    if not g_path:
+        g_path = f"results/{config.EXP.NAME}/g_best.pth"
+
     # Initialize the super-resolution bsrgan_model
     generator = model.Generator(config).to(config.MODEL.DEVICE)
     generator.load_state_dict(torch.load(g_path))
@@ -83,5 +86,6 @@ def test(config: Config, g_path: str) -> None:
 
 if __name__ == "__main__":
     config = Config()
-    g_path = 'results/warmup-exp/g_best.pth'
-    test(config = config, g_path = g_path)
+    config.EXP.NAME = "srgan"
+
+    test(config = config)

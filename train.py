@@ -31,6 +31,7 @@ def train(config: Config = None):
     batches_done = 0
     best_psnr = 0.0
     best_ssim = 0.0
+    loss_values = dict()
 
     # Define models
     discriminator = model.Discriminator().to(config.MODEL.DEVICE)
@@ -102,9 +103,9 @@ def train(config: Config = None):
     # Init Tensorboard writer to store train and test info
     # also save the config used in this run to Tensorboard
     writer = SummaryWriter(f"samples/logs/{config.EXP.NAME}")
-    writer.add_text("Config", config)
+    writer.add_text("Config/Params", config.__repr__())
 
-    for epoch in range(config.EXP.START_EPOCH, config.EXP.N_EPOCHS):
+    for epoch in range(config.EXP.START_EPOCH, config.EXP.N_EPOCHS + 1):
         print(f"Beginning train epoch: {epoch+1}")
 
         # ----------------
@@ -121,9 +122,8 @@ def train(config: Config = None):
             lr = lr.to(device=config.MODEL.DEVICE, non_blocking=True)
 
             # Set the real sample label to 1, and the false sample label to 0
-            batch_size, _, height, width = gt.shape
-            real_label = torch.full([batch_size, 1], 1.0 - config.EXP.LABEL_SMOOTHING, dtype=gt.dtype, device=config.MODEL.DEVICE)
-            fake_label = torch.full([batch_size, 1], 0.0, dtype=gt.dtype, device=config.MODEL.DEVICE)
+            real_label = torch.full([config.DATA.BATCH_SIZE, 1], 1.0 - config.EXP.LABEL_SMOOTHING, dtype=gt.dtype, device=config.MODEL.DEVICE)
+            fake_label = torch.full([config.DATA.BATCH_SIZE, 1], 0.0, dtype=gt.dtype, device=config.MODEL.DEVICE)
 
             # ----------------
             #  Train Generator
@@ -132,25 +132,45 @@ def train(config: Config = None):
             generator.zero_grad()
 
             sr = generator(lr)
-
-            # Apply losses ? maybe just pixel TODO: Add weighting
-            pixel_loss = 1.0 * pixel_criterion(gt, sr)
-
+            
+            # Warmup generator
             if batches_done < config.EXP.N_WARMUP_BATCHES:
-                pixel_loss.backward()
+
+                # Calculate loss for the warmup criterions
+                warmup_loss = torch.tensor(0.0, device=config.MODEL.DEVICE)
+                for name in config.MODEL.G_LOSS.WARMUP_CRITERIONS:
+                    fn = config.MODEL.G_LOSS.CRITERIONS[name]
+                    weight = config.MODEL.G_LOSS.CRITERION_WEIGHTS[name]
+                    warmup_loss += fn(sr, gt) * weight
+
+                warmup_loss.backward()
                 g_optimizer.step()
+
                 if batch_num % config.LOG_TRAIN_PERIOD == 0:
-                    print("[Epoch %d/%d] [Batch %d/%d] [G pixel: %f]" % (epoch + 1, config.EXP.N_EPOCHS, batch_num, len(train_dataloader), pixel_loss.item()))
+                    print(f"[Epoch {epoch+1}/{config.EXP.N_EPOCHS}] [Batch {batch_num}/{len(train_dataloader)}] [Warmup loss: {warmup_loss.item()}]")
                 continue
-                    
+
+
             # Extract validity predictions from discriminator
             pred_gt = discriminator(gt)
             pred_sr = discriminator(sr).detach()
 
-            adversarial_loss = 0.005 * adversarial_criterion(pred_sr - pred_gt.mean(0, keepdim=True), real_label)# * config.MODEL.G_LOSS.CRITERION_WEIGHTS['Adversarial']
-            content_loss = 1.0 * content_criterion(gt, sr)
+            # Calculate Generator loss
+            g_loss = torch.tensor(0.0, device=config.MODEL.DEVICE)
+            for name, criterion in config.MODEL.G_LOSS.CRITERIONS.items():
+                weight = config.MODEL.G_LOSS.CRITERION_WEIGHTS[name]
+                if name == 'Adversarial':
+                    loss = criterion(pred_sr - pred_gt.mean(0, keepdim=True), real_label) * weight
+                else:
+                    loss = criterion(sr, gt) * weight
+                g_loss += loss
+                loss_values[name] = loss.item() # Used for logging to Tensorboard
 
-            g_loss = content_loss + pixel_loss + adversarial_loss # TODO: Add weighting
+
+            # adversarial_loss = 0.005 * adversarial_criterion(pred_sr - pred_gt.mean(0, keepdim=True), real_label)# * config.MODEL.G_LOSS.CRITERION_WEIGHTS['Adversarial']
+            # content_loss = 1.0 * content_criterion(gt, sr)
+
+            # g_loss = content_loss + pixel_loss + adversarial_loss # TODO: Add weighting
 
             g_loss.backward()
             g_optimizer.step()
@@ -186,32 +206,17 @@ def train(config: Config = None):
             # Log to TensorBoard
             writer.add_scalar("Train/D_Loss", d_loss.item(), batches_done)
             writer.add_scalar("Train/G_Loss", g_loss.item(), batches_done)
-            writer.add_scalar("Train/G_ContentLoss", content_loss.item(), batches_done)
-            writer.add_scalar("Train/G_AdversarialLoss", adversarial_loss.item(), batches_done)
-            writer.add_scalar("Train/G_PixelLoss", pixel_loss.item(), batches_done)
+            for name, loss in loss_values.items():
+                writer.add_scalar(f"Train/{name}", loss, batches_done)
             writer.add_scalar("Train/D(GT)_Probability", d_gt_probability.item(), batches_done)
             writer.add_scalar("Train/D(SR)_Probability", d_sr_probability.item(), batches_done)
 
             # Print to terminal / log
-            print(
-                "[Epoch %d/%d] [Batch %d/%d] [D loss: %f] [G loss: %f, content: %f, adv: %f, pixel: %f]"
-                % (
-                    epoch + 1,
-                    config.EXP.N_EPOCHS,
-                    batch_num,
-                    len(train_dataloader),
-                    d_loss.item(),
-                    g_loss.item(),
-                    content_loss.item(),
-                    adversarial_loss.item(),
-                    pixel_loss.item(),
-                )
-            )
+            print(f"[Epoch {epoch+1}/{config.EXP.N_EPOCHS}] [Batch {batch_num}/{len(train_dataloader)}] [D loss: {d_loss.item()}] [G loss: {g_loss.item()}] [G losses: {loss_values}]")
 
         # Dont do validating if we are warming up
         if batches_done < config.EXP.N_WARMUP_BATCHES:
             continue
-        print("validating!")
         # ----------------
         #  Validate
         # ----------------
@@ -229,13 +234,9 @@ def train(config: Config = None):
 
                 psnr = psnr_model(sr, gt)
                 ssim = ssim_model(sr, gt)
-                # psnr1 = PeakSignalNoiseRatio(data_range=1.0).to(device=config.MODEL.DEVICE, non_blocking=True)(sr, gt)
-                # ssim1 = structural_similarity_index_measure(sr, gt)
 
                 avg_psnr += psnr
                 avg_ssim += ssim
-                # avg_psnr1 += psnr1
-                # avg_ssim1 += ssim1 
 
                 # Print training log information
                 if batch_num % config.LOG_VALIDATION_PERIOD == 0:
@@ -245,13 +246,10 @@ def train(config: Config = None):
         # Write avg PSNR and SSIM to Tensorflow and logs
         avg_psnr = (avg_psnr / len(test_dataloader)).item()
         avg_ssim = (avg_ssim / len(test_dataloader)).item()
-        # avg_psnr1 = (avg_psnr1 / len(test_dataloader)).item()
-        # avg_ssim1 = (avg_ssim1 / len(test_dataloader)).item()
         writer.add_scalar(f"Test/PSNR", avg_psnr, epoch + 1)
         writer.add_scalar(f"Test/SSIM", avg_ssim, epoch + 1)
         
         print(f"-----\n[AVG PSNR: {avg_psnr}] [AVG SSIM: {avg_ssim}]\n-----\n")
-        # print(f"-----\n[AVG PSNR: {avg_psnr1}] [AVG SSIM: {avg_ssim1}]\n-----\n")
         
         # Update learning rate
         d_scheduler.step()
