@@ -126,10 +126,13 @@ def train(config: Config = None):
             fake_label = torch.full([config.DATA.BATCH_SIZE, 1], 0.0, dtype=gt.dtype, device=config.MODEL.DEVICE)
 
             # ----------------
-            #  Train Generator
+            #  Update Generator
             # ----------------
             g_optimizer.zero_grad()
             generator.zero_grad()
+
+            for p in discriminator.parameters():
+                p.requires_grad = False
 
             sr = generator(lr)
             
@@ -151,51 +154,40 @@ def train(config: Config = None):
                 continue
 
 
-            # Extract validity predictions from discriminator
-            pred_gt = discriminator(gt)
-            pred_sr = discriminator(sr).detach()
-
             # Calculate Generator loss
             g_loss = torch.tensor(0.0, device=config.MODEL.DEVICE)
             for name, criterion in config.MODEL.G_LOSS.CRITERIONS.items():
                 weight = config.MODEL.G_LOSS.CRITERION_WEIGHTS[name]
                 if name == 'Adversarial':
-                    loss = criterion(pred_sr - pred_gt.mean(0, keepdim=True), real_label) * weight
+                    # Extract validity predictions from discriminator
+                    pred_sr = discriminator(sr)
+                    loss = weight * criterion(pred_sr, real_label)
                 else:
                     loss = criterion(sr, gt) * weight
                 g_loss += loss
                 loss_values[name] = loss.item() # Used for logging to Tensorboard
 
 
-            # adversarial_loss = 0.005 * adversarial_criterion(pred_sr - pred_gt.mean(0, keepdim=True), real_label)# * config.MODEL.G_LOSS.CRITERION_WEIGHTS['Adversarial']
-            # content_loss = 1.0 * content_criterion(gt, sr)
-
-            # g_loss = content_loss + pixel_loss + adversarial_loss # TODO: Add weighting
-
             g_loss.backward()
             g_optimizer.step()
 
             # --------------------
-            #  Train Discriminator
+            #  Update Discriminator
             # --------------------
             d_optimizer.zero_grad()
             discriminator.zero_grad()
+            for p in discriminator.parameters():
+                p.requires_grad = True
 
+            pred_sr = discriminator(sr)
             pred_gt = discriminator(gt)
-            pred_sr = discriminator(sr.detach())
-            
-            # Calculate the classification score of the discriminator model for real samples
-            loss_real = 0.5 * adversarial_criterion(pred_gt - pred_sr.mean(0, keepdim=True), real_label)
-            loss_fake = 0.5 * adversarial_criterion(pred_sr - pred_gt.mean(0, keepdim=True), fake_label)
-            
-            d_loss = loss_real + loss_fake
+            real_loss = 0.5 * adversarial_criterion(pred_gt, real_label)
+            fake_loss = 0.5 * adversarial_criterion(pred_sr, fake_label)
+            d_loss = real_loss + fake_loss
+
             d_loss.backward()
             d_optimizer.step()
 
-            # Calculate the score of the discriminator on real samples and fake samples,
-            # the score of real samples is close to 1, and the score of fake samples is close to 0
-            d_gt_probability = torch.sigmoid_(torch.mean(pred_gt.detach()))
-            d_sr_probability = torch.sigmoid_(torch.mean(pred_sr.detach()))
 
             # -------------
             #  Log Progress
@@ -208,8 +200,8 @@ def train(config: Config = None):
             writer.add_scalar("Train/G_Loss", g_loss.item(), batches_done)
             for name, loss in loss_values.items():
                 writer.add_scalar(f"Train/{name}", loss, batches_done)
-            writer.add_scalar("Train/D(GT)_Probability", d_gt_probability.item(), batches_done)
-            writer.add_scalar("Train/D(SR)_Probability", d_sr_probability.item(), batches_done)
+            writer.add_scalar("Train/D(GT)_Probability", torch.mean(pred_gt), batches_done)
+            writer.add_scalar("Train/D(SR)_Probability", torch.mean(pred_sr), batches_done)
 
             # Print to terminal / log
             print(f"[Epoch {epoch+1}/{config.EXP.N_EPOCHS}] [Batch {batch_num}/{len(train_dataloader)}] [D loss: {d_loss.item()}] [G loss: {g_loss.item()}] [G losses: {loss_values}]")

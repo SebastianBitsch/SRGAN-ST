@@ -123,6 +123,7 @@ class Discriminator(nn.Module):
             nn.Linear(512 * 6 * 6, 1024),
             nn.LeakyReLU(0.2, True),
             nn.Linear(1024, 1),
+            nn.Sigmoid()
         )
 
     def forward(self, x: Tensor) -> Tensor:
