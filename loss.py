@@ -51,6 +51,9 @@ class ContentLoss(nn.Module):
         for model_parameters in self.feature_extractor.parameters():
             model_parameters.requires_grad = False
 
+    def __repr__(self):
+        return "ContentLoss()"
+
     def forward(self, sr_tensor: Tensor, gt_tensor: Tensor) -> Tensor:
         # Standardized operations
         sr_tensor = self.normalize(sr_tensor)

@@ -89,12 +89,9 @@ class TestImageDataset(Dataset):
         # # Note: The range of input and output is between [0, 1]
         # gt_tensor = imgproc.image_to_tensor(gt_image, False, False)
         # lr_tensor = imgproc.image_to_tensor(lr_image, False, False)
-        im_path = self.image_file_names[batch_index]
 
-        gt_tensor = read_image(im_path).float().unsqueeze(0) / 255.0
-        lr_tensor = F.interpolate(gt_tensor, scale_factor = 1.0 / self.upscale_factor, mode='bicubic', antialias=True)
-        gt_tensor = gt_tensor.squeeze()
-        lr_tensor = lr_tensor.squeeze()
+        gt_tensor = read_image(self.gt_image_file_names[batch_index]).float() / 255.0
+        lr_tensor = read_image(self.lr_image_file_names[batch_index]).float() / 255.0
 
         return gt_tensor, lr_tensor
 
