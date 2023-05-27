@@ -40,7 +40,7 @@ class TrainImageDataset(Dataset):
         im_path = self.image_file_names[batch_index]
 
         gt_tensor = read_image(im_path).float().unsqueeze(0) / 255.0
-        lr_tensor = F.interpolate(gt_tensor, scale_factor = 1.0 / self.upscale_factor, mode='bicubic', antialias=True)
+        lr_tensor = F.interpolate(gt_tensor, align_corners = True, scale_factor = 1.0 / self.upscale_factor, mode='bicubic', antialias=True).clamp(min=0, max=255)
         gt_tensor = gt_tensor.squeeze()
         lr_tensor = lr_tensor.squeeze()
 
