@@ -5,7 +5,7 @@ from loss import ContentLoss
 class dotdict(dict):
     """
     Cheeky helper class that adds dot.notation access to dictionary attributes. 
-    Makes the config a bit nicer.
+    Makes the config a bit more readable.
     Stolen from: https://stackoverflow.com/a/23689767/19877091
     """
     __getattr__ = dict.__getitem__
@@ -19,7 +19,7 @@ class Config():
     EXP.USER = "s204163"
     EXP.NAME = "experiment-name"
     EXP.START_EPOCH = 0             # Whether to resume training at some epoch number or start at epoch 0
-    EXP.N_EPOCHS = 20               # Number of epochs to train for
+    EXP.N_EPOCHS = 15               # Number of epochs to train for
     EXP.N_WARMUP_BATCHES = 0        # Number of epochs to warm up the generator before the discriminator starts learning
     EXP.LABEL_SMOOTHING = 0.0       # One-sided label smoothing. The true label will be 1.0 - label_smoothing
 

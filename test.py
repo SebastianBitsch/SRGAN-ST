@@ -32,6 +32,7 @@ def test(config: Config, g_path: str = None) -> None:
 
     # Initialize the super-resolution bsrgan_model
     generator = model.Generator(config).to(config.MODEL.DEVICE)
+    # generator = model.Generator(3,3,64,23,32).to(config.MODEL.DEVICE)
     generator.load_state_dict(torch.load(g_path))
 
     # Create a folder of super-resolution experiment results
@@ -92,6 +93,6 @@ def test(config: Config, g_path: str = None) -> None:
 
 if __name__ == "__main__":
     config = Config()
-    config.EXP.NAME = "plain-bbgan-rewrite"
+    config.EXP.NAME = "srgan"
 
     test(config = config)
