@@ -20,7 +20,9 @@ from natsort import natsorted
 import imgproc
 import model
 from image_quality_assessment import PSNR, SSIM
+
 from torchvision.io import read_image
+from torchvision.utils import save_image
 
 from config import Config
 
@@ -52,25 +54,24 @@ def test(config: Config, g_path: str = None) -> None:
 
     for im_name in file_names:
         lr_image_path = os.path.join(config.DATA.TEST_LR_IMAGES_DIR, im_name)
-        sr_image_path = os.path.join(config.DATA.TEST_SR_IMAGES_DIR, config.EXP.NAME + "1", im_name)
+        sr_image_path = os.path.join(config.DATA.TEST_SR_IMAGES_DIR, config.EXP.NAME, im_name)
         gt_image_path = os.path.join(config.DATA.TEST_GT_IMAGES_DIR, im_name)
 
         print(f"Processing `{os.path.abspath(lr_image_path)}`...")
-        lr_tensor = imgproc.preprocess_one_image(lr_image_path, config.MODEL.DEVICE)
-        gt_tensor = imgproc.preprocess_one_image(gt_image_path, config.MODEL.DEVICE)
-        gt_tensor = read_image(im_path).float().unsqueeze(0) / 255.0
-        lr_tensor = F.interpolate(gt_tensor, scale_factor = 1.0 / self.upscale_factor, mode='bicubic', antialias=True)
-        gt_tensor = gt_tensor.squeeze()
-        lr_tensor = lr_tensor.squeeze()
+        # lr_tensor = imgproc.preprocess_one_image(lr_image_path, config.MODEL.DEVICE)
+        # gt_tensor = imgproc.preprocess_one_image(gt_image_path, config.MODEL.DEVICE)
+        lr_tensor = read_image(lr_image_path).float().unsqueeze(0).to(config.MODEL.DEVICE) / 255.0
+        gt_tensor = read_image(gt_image_path).float().unsqueeze(0).to(config.MODEL.DEVICE) / 255.0
 
         # Only reconstruct the Y channel image data.
         with torch.no_grad():
-            sr_tensor = generator(lr_tensor)
+            sr_tensor = generator(lr_tensor) # Add fake batches dim
 
         # Save image
-        sr_image = imgproc.tensor_to_image(sr_tensor, True, False)
-        sr_image = cv2.cvtColor(sr_image, cv2.COLOR_RGB2BGR)
-        cv2.imwrite(sr_image_path, sr_image)
+        # sr_image = imgproc.tensor_to_image(sr_tensor, True, False)
+        # sr_image = cv2.cvtColor(sr_image, cv2.COLOR_RGB2BGR)
+        # cv2.imwrite(sr_image_path, sr_image)
+        save_image(sr_tensor, sr_image_path)
 
         # Cal IQA metrics
         psnr_avg += psnr_model(sr_tensor, gt_tensor).item()
@@ -84,13 +85,13 @@ def test(config: Config, g_path: str = None) -> None:
     ssim_label = f"SSIM: {ssim_avg:4.4f} [u]"
     print(psnr_label + ssim_label)
     
-    out_file = open(f"results/test/{config.EXP.NAME}1/_metrics.txt","w")
+    out_file = open(f"results/test/{config.EXP.NAME}/_metrics.txt","w")
     out_file.writelines([psnr_label, ssim_label])
     out_file.close()
 
 
 if __name__ == "__main__":
     config = Config()
-    config.EXP.NAME = "bbgan-label-smoothing-x10-loss"
+    config.EXP.NAME = "plain-bbgan-rewrite"
 
     test(config = config)

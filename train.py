@@ -103,7 +103,7 @@ def train(config: Config = None):
     # Init Tensorboard writer to store train and test info
     # also save the config used in this run to Tensorboard
     writer = SummaryWriter(f"samples/logs/{config.EXP.NAME}")
-    writer.add_text("Config/Params", config.__repr__())
+    writer.add_text("Config/Params", config.get_all_params())
 
     for epoch in range(config.EXP.START_EPOCH, config.EXP.N_EPOCHS + 1):
         print(f"Beginning train epoch: {epoch+1}")
@@ -123,6 +123,7 @@ def train(config: Config = None):
 
             # Set the real sample label to 1, and the false sample label to 0
             real_label = torch.full([config.DATA.BATCH_SIZE, 1], 1.0 - config.EXP.LABEL_SMOOTHING, dtype=gt.dtype, device=config.MODEL.DEVICE)
+            ones = torch.full([config.DATA.BATCH_SIZE, 1], 1.0, dtype=gt.dtype, device=config.MODEL.DEVICE)
             fake_label = torch.full([config.DATA.BATCH_SIZE, 1], 0.0, dtype=gt.dtype, device=config.MODEL.DEVICE)
 
             # ----------------
@@ -149,6 +150,7 @@ def train(config: Config = None):
                 warmup_loss.backward()
                 g_optimizer.step()
 
+                writer.add_scalar("Train/G_Loss", warmup_loss.item(), batches_done)
                 if batch_num % config.LOG_TRAIN_PERIOD == 0:
                     print(f"[Epoch {epoch+1}/{config.EXP.N_EPOCHS}] [Batch {batch_num}/{len(train_dataloader)}] [Warmup loss: {warmup_loss.item()}]")
                 continue
@@ -160,8 +162,12 @@ def train(config: Config = None):
                 weight = config.MODEL.G_LOSS.CRITERION_WEIGHTS[name]
                 if name == 'Adversarial':
                     # Extract validity predictions from discriminator
-                    pred_sr = discriminator(sr)
-                    loss = weight * criterion(pred_sr, real_label)
+                    # pred_sr = discriminator(sr).detach() # [0,1]
+                    # loss = weight * torch.log(real_label - pred_sr)
+                    pred_sr = discriminator(sr).detach() # [0,1]
+                    loss = weight * criterion(pred_sr, real_label)#(torch.sum(ones) - torch.sum(pred_sr)) / torch.sum(ones)
+                    if batches_done < 4:
+                        print("adv loss",loss)
                 else:
                     loss = criterion(sr, gt) * weight
                 g_loss += loss
@@ -179,15 +185,20 @@ def train(config: Config = None):
             for p in discriminator.parameters():
                 p.requires_grad = True
 
-            pred_sr = discriminator(sr)
+            pred_sr = discriminator(sr.detach())
             pred_gt = discriminator(gt)
             real_loss = 0.5 * adversarial_criterion(pred_gt, real_label)
             fake_loss = 0.5 * adversarial_criterion(pred_sr, fake_label)
             d_loss = real_loss + fake_loss
+            # real_loss = (torch.sum(ones) - torch.sum(pred_gt)) / torch.sum(ones)
+            # fake_loss = torch.sum(pred_sr) / torch.sum(ones)
 
+            # d_loss = torch.sum(torch.log(pred_sr))
+            # d_loss = 0.5 * real_loss + 0.5 * fake_loss
+            
             d_loss.backward()
             d_optimizer.step()
-
+            
 
             # -------------
             #  Log Progress
