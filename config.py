@@ -16,6 +16,7 @@ class dotdict(dict):
 
 class Config():
     EXP = dotdict()
+    EXP.USER = "s204163"
     EXP.NAME = "experiment-name"
     EXP.START_EPOCH = 0             # Whether to resume training at some epoch number or start at epoch 0
     EXP.N_EPOCHS = 20               # Number of epochs to train for
@@ -28,10 +29,10 @@ class Config():
 
     # Data
     DATA = dotdict()
-    DATA.TRAIN_GT_IMAGES_DIR = "/work3/s204163/data/ImageNet/train" # Training HR gt images 
-    DATA.TEST_SET = 'Urban100'                                          # The test set to use; Set5, Set14, BSD100, Urban100
-    DATA.TEST_GT_IMAGES_DIR = F"/work3/s204163/data/{DATA.TEST_SET}/GTmod12"    # Test HR images
-    DATA.TEST_LR_IMAGES_DIR = f"/work3/s204163/data/{DATA.TEST_SET}/LRbicx4"    # Test downscaled images
+    DATA.TRAIN_GT_IMAGES_DIR = f"/work3/{EXP.USER}/data/ImageNet/train" # Training HR gt images 
+    DATA.TEST_SET = 'Set5'                                          # The test set to use; Set5, Set14, BSD100, Urban100
+    DATA.TEST_GT_IMAGES_DIR = F"/work3/{EXP.USER}/data/{DATA.TEST_SET}/GTmod12"    # Test HR images
+    DATA.TEST_LR_IMAGES_DIR = f"/work3/{EXP.USER}/data/{DATA.TEST_SET}/LRbicx4"    # Test downscaled images
     DATA.TEST_SR_IMAGES_DIR = "results/test"                       # Directory to output the SR images to in test.py
     DATA.SEED = 1312
     DATA.UPSCALE_FACTOR = 4
@@ -68,6 +69,8 @@ class Config():
     MODEL.G_LOSS.WARMUP_CRITERIONS = [
         "Pixel",
     ]
+    MODEL.D_IN_CHANNEL = 3
+    MODEL.D_N_CHANNEL = 32
 
     # Solver
     SOLVER = dotdict()
