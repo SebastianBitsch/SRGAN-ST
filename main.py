@@ -3,16 +3,16 @@ from config import Config
 from train import train
 from test import test
 
-from loss import BestBuddyLoss
+from loss import BestBuddyLoss, GramLoss
 
-def get_jobindex(fallback:int = None) -> int:
+def get_jobindex(fallback:int = 0) -> int:
     """Get the job-index set in bash. This is mostly for array jobs where multiple models are trained in parallel"""
     num = os.getenv('job_index')
     return int(num) if num else fallback
 
 
-def benchmark_experiment(config: Config) -> Config:
-    config.EXP.NAME = "plain-dummy"
+def srgan(config: Config) -> Config:
+    config.EXP.NAME = "srgan"
     return config
 
 def warmup_experiment(config: Config, index:int) -> Config:
@@ -28,9 +28,14 @@ def srgan_bbgan(config: Config, index:int) -> Config:
     config.EXP.LABEL_SMOOTHING = 0.1
     config.EXP.N_WARMUP_BATCHES = 5000
     if index == 1:
-        config.add_g_criterion("BestBuddy", BestBuddyLoss(), 1.0)
+        config.add_g_criterion("BestBuddy", BestBuddyLoss(), 10.0)
     return config
 
+
+def test_gramloss(config: Config) -> Config:
+    config.EXP.NAME = "gram-model"
+    config.add_g_criterion("Gram", GramLoss(), 10.0)
+    return config
 
 if __name__ == "__main__":
 
@@ -40,11 +45,8 @@ if __name__ == "__main__":
     # Edit config based on 
     config = Config()
 
-    # config = warmup_experiment(config, job_index)
-    # config.EXP.NAME = "terminal"
-    config = srgan_bbgan(config, job_index)
-    # config = benchmark_experiment(config)
-
+    # config = test_gramloss(config)
+    config = srgan(config)
 
     print(f"Running job: {job_index}")
     train(config = config)

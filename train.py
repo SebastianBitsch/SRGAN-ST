@@ -21,27 +21,26 @@ from loss import ContentLoss
 from config import Config
 from utils import init_random_seed
 
+
 def train(config: Config = None):
-    config = Config() if not config else config
     
     # Set seed
     init_random_seed(config.DATA.SEED)
 
     # House keeping variables
     batches_done = 0
-    best_psnr = 0.0
-    best_ssim = 0.0
+    best_psnr = best_ssim = 0.0
     loss_values = dict()
 
     # Define models
+    # discriminator = model.Discriminator(config.MODEL.D_IN_CHANNEL, config.MODEL.D_N_CHANNEL).to(config.MODEL.DEVICE)
+    # generator = model.Generator(3,3,64,23,32).to(config.MODEL.DEVICE)
+
     discriminator = model.Discriminator().to(config.MODEL.DEVICE)
     generator = model.Generator(config).to(config.MODEL.DEVICE)
 
     # Define losses
     adversarial_criterion = nn.BCEWithLogitsLoss()
-    content_criterion = ContentLoss(config.MODEL.G_LOSS.VGG19_LAYERS, device=config.MODEL.DEVICE)
-    pixel_criterion = nn.MSELoss() # Maybe use torch.nn.L1Loss().to(device) ?
-
 
     # Optimizers
     d_optimizer = optim.Adam(
@@ -105,17 +104,18 @@ def train(config: Config = None):
     writer = SummaryWriter(f"samples/logs/{config.EXP.NAME}")
     writer.add_text("Config/Params", config.get_all_params())
 
-    for epoch in range(config.EXP.START_EPOCH, config.EXP.N_EPOCHS + 1):
+    for epoch in range(config.EXP.START_EPOCH, config.EXP.N_EPOCHS):
         print(f"Beginning train epoch: {epoch+1}")
 
         # ----------------
         #  Train
         # ----------------
-        discriminator.train()
-        generator.train()
             
         for batch_num, (gt, lr) in enumerate(train_dataloader):
             batches_done += 1
+
+            discriminator.train()
+            generator.train()
 
             # Transfer in-memory data to CUDA devices to speed up training
             gt = gt.to(device=config.MODEL.DEVICE, non_blocking=True)
@@ -123,7 +123,6 @@ def train(config: Config = None):
 
             # Set the real sample label to 1, and the false sample label to 0
             real_label = torch.full([config.DATA.BATCH_SIZE, 1], 1.0 - config.EXP.LABEL_SMOOTHING, dtype=gt.dtype, device=config.MODEL.DEVICE)
-            ones = torch.full([config.DATA.BATCH_SIZE, 1], 1.0, dtype=gt.dtype, device=config.MODEL.DEVICE)
             fake_label = torch.full([config.DATA.BATCH_SIZE, 1], 0.0, dtype=gt.dtype, device=config.MODEL.DEVICE)
 
             # ----------------
@@ -149,6 +148,7 @@ def train(config: Config = None):
 
                 warmup_loss.backward()
                 g_optimizer.step()
+                g_scheduler.step()
 
                 writer.add_scalar("Train/G_Loss", warmup_loss.item(), batches_done)
                 if batch_num % config.LOG_TRAIN_PERIOD == 0:
@@ -164,18 +164,26 @@ def train(config: Config = None):
                     # Extract validity predictions from discriminator
                     # pred_sr = discriminator(sr).detach() # [0,1]
                     # loss = weight * torch.log(real_label - pred_sr)
-                    pred_sr = discriminator(sr).detach() # [0,1]
-                    loss = weight * criterion(pred_sr, real_label)#(torch.sum(ones) - torch.sum(pred_sr)) / torch.sum(ones)
-                    if batches_done < 4:
-                        print("adv loss",loss)
+                    # pred_sr = discriminator(sr)
+                    # pred_gt = discriminator(gt)#.detach()
+                    # print("preds sr",pred_sr, pred_gt)
+                    
+                    # print("FGH",pred_sr - pred_gt)
+                    # real_loss = 0.5 * criterion(pred_gt - torch.mean(pred_sr), fake_label)
+                    # fake_loss = 0.5 * criterion(pred_sr - torch.mean(pred_gt), real_label)
+                    # loss = weight * (real_loss + fake_loss)
+                    # loss = weight * torch.sum(ones - pred_sr)#(torch.sum(ones) - torch.sum(pred_sr)) / torch.sum(ones)
+                    # print("Generator adv loss", loss)
+                    loss = criterion(discriminator(sr),real_label)
                 else:
-                    loss = criterion(sr, gt) * weight
-                g_loss += loss
+                    loss = criterion(sr, gt)
+                g_loss += loss * weight
                 loss_values[name] = loss.item() # Used for logging to Tensorboard
 
 
             g_loss.backward()
             g_optimizer.step()
+            g_scheduler.step()
 
             # --------------------
             #  Update Discriminator
@@ -185,20 +193,40 @@ def train(config: Config = None):
             for p in discriminator.parameters():
                 p.requires_grad = True
 
-            pred_sr = discriminator(sr.detach())
-            pred_gt = discriminator(gt)
-            real_loss = 0.5 * adversarial_criterion(pred_gt, real_label)
-            fake_loss = 0.5 * adversarial_criterion(pred_sr, fake_label)
-            d_loss = real_loss + fake_loss
+            # pred_sr = discriminator(sr).detach()    # 16 tal [0-1]
+            # pred_gt = discriminator(gt)             # 16 tal [0-1]
+            # real_loss = adversarial_criterion(pred_gt - torch.mean(pred_sr), real_label)
+            # real_loss.backward()
+
+            # pred_sr = discriminator(sr.detach())    # 16 tal [0-1]
+            # fake_loss = adversarial_criterion(pred_sr - torch.mean(pred_gt.detach()), fake_label)
+            # fake_loss.backward()
+            # real_loss = 0.5 * adversarial_criterion(pred_gt, real_label)
+            # fake_loss = 0.5 * adversarial_criterion(pred_sr, fake_label)
+            # d_loss = torch.sum(pred_sr) + torch.sum(real_label - pred_gt)
+            gt_output = discriminator(gt)
+            d_loss_gt = adversarial_criterion(gt_output, real_label)
+
+            # backpropagate discriminator's loss on real samples
+            d_loss_gt.backward()
+
+            # Calculate the classification score of the generated samples by the discriminator model
+            sr_output = discriminator(sr.detach().clone())
+            d_loss_sr = adversarial_criterion(sr_output, fake_label)
+            d_loss_sr.backward()
+
+            d_loss = d_loss_gt + d_loss_sr
+            # d_loss = (real_loss + fake_loss) / 2
+            # print("Discriminator adv loss", d_loss)
             # real_loss = (torch.sum(ones) - torch.sum(pred_gt)) / torch.sum(ones)
             # fake_loss = torch.sum(pred_sr) / torch.sum(ones)
 
             # d_loss = torch.sum(torch.log(pred_sr))
             # d_loss = 0.5 * real_loss + 0.5 * fake_loss
             
-            d_loss.backward()
+            # d_loss.backward()
             d_optimizer.step()
-            
+            d_scheduler.step()
 
             # -------------
             #  Log Progress
@@ -211,8 +239,8 @@ def train(config: Config = None):
             writer.add_scalar("Train/G_Loss", g_loss.item(), batches_done)
             for name, loss in loss_values.items():
                 writer.add_scalar(f"Train/{name}", loss, batches_done)
-            writer.add_scalar("Train/D(GT)_Probability", torch.mean(pred_gt), batches_done)
-            writer.add_scalar("Train/D(SR)_Probability", torch.mean(pred_sr), batches_done)
+            writer.add_scalar("Train/D(GT)_Probability", torch.sigmoid_(torch.mean(gt_output.detach())).item(), batches_done)
+            writer.add_scalar("Train/D(SR)_Probability", torch.sigmoid_(torch.mean(sr_output.detach())).item(), batches_done)
 
             # Print to terminal / log
             print(f"[Epoch {epoch+1}/{config.EXP.N_EPOCHS}] [Batch {batch_num}/{len(train_dataloader)}] [D loss: {d_loss.item()}] [G loss: {g_loss.item()}] [G losses: {loss_values}]")
@@ -235,6 +263,9 @@ def train(config: Config = None):
 
                 sr = generator(lr)
 
+                print("lr", lr.min(), lr.max(), lr.shape)
+                print("sr", sr.min(), sr.max(), sr.shape)
+                print("gt", gt.min(), gt.max(), gt.shape)
                 psnr = psnr_model(sr, gt)
                 ssim = ssim_model(sr, gt)
 
@@ -255,8 +286,8 @@ def train(config: Config = None):
         print(f"-----\n[AVG PSNR: {avg_psnr}] [AVG SSIM: {avg_ssim}]\n-----\n")
         
         # Update learning rate
-        d_scheduler.step()
-        g_scheduler.step()
+        # d_scheduler.step()
+        # g_scheduler.step()
 
         # ----------------
         #  Save best model
