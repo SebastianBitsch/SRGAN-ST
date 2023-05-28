@@ -37,7 +37,7 @@ class Config():
     DATA.SEED = 1312
     DATA.UPSCALE_FACTOR = 4
     DATA.BATCH_SIZE = 16
-    DATA.GT_IMAGE_SIZE = 192    # Size of the HR GT images i.e. 192 x 192
+    DATA.GT_IMAGE_SIZE = 96    # Size of the HR GT images i.e. 192 x 192
     
     # Model
     MODEL = dotdict()
