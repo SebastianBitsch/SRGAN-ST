@@ -6,8 +6,6 @@ import cv2
 import numpy as np
 from tqdm import tqdm
 
-from config import Config
-
 def main(args) -> None:
     os.makedirs(args.output_dir, exist_ok=True)
 
@@ -32,7 +30,6 @@ def worker(image_file_name:str, args:dict) -> None:
     image = cv2.imread(f"{args.input_dir}/{image_file_name}", cv2.IMREAD_UNCHANGED)
     im_h, im_w, _ = image.shape
     index = 1
-
     
     if args.output_size <= im_h and args.output_size <= im_w:
         for pos_y in range(0, im_h - args.output_size + 1, args.step_size):
@@ -51,7 +48,7 @@ def worker(image_file_name:str, args:dict) -> None:
 
 
 if __name__ == "__main__":
-    config = Config()
+    # config = Config()
 
     parser = argparse.ArgumentParser(
         description="""
@@ -65,8 +62,8 @@ if __name__ == "__main__":
     )
     parser.add_argument("--input_dir", type=str, default="/work3/s204163/data/ImageNet/original")
     parser.add_argument("--output_dir", type=str, default="/work3/s204163/data/ImageNet/train")
-    parser.add_argument("--output_size", type=int, default=config.DATA.GT_IMAGE_SIZE)
-    parser.add_argument("--step_size", type=int, default=config.DATA.GT_IMAGE_SIZE)
+    parser.add_argument("--output_size", type=int, default=96)
+    parser.add_argument("--step_size", type=int, default=96)
     parser.add_argument("--num_workers", type=int, default=16)
     args = parser.parse_args()
 
