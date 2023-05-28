@@ -7,6 +7,10 @@ import torch.nn.functional as F
 from torchvision import models
 from torchvision import transforms
 from torchvision.models.feature_extraction import create_feature_extractor
+from structure_tensor import structure_tensor_2d
+
+
+
 
 
 class ContentLoss(nn.Module):
@@ -50,6 +54,9 @@ class ContentLoss(nn.Module):
         # Freeze model parameters.
         for model_parameters in self.feature_extractor.parameters():
             model_parameters.requires_grad = False
+
+    def __repr__(self):
+        return "ContentLoss()"
 
     def forward(self, sr_tensor: Tensor, gt_tensor: Tensor) -> Tensor:
         # Standardized operations
@@ -243,88 +250,97 @@ class BestBuddyLoss(nn.Module):
 #         return loss
 
 
+class STLoss(BestBuddyLoss):
+
+    def __init__(self, alpha=1, beta=1, ksize=3, pad=0, stride=3, dist_norm='l2', criterion='l1'):
+        super().__init__(alpha, beta, ksize, pad, stride, dist_norm, criterion)
+
+    def st_mat(self, x):
+        """
+        Computes the structure tensor
+
+        in: torch.Size([16, 3, 96, 96])
+        out: torch.Size([16, 3, 3])
+        """
+        sigma = 0.4 # config.ST.sigma eller lign
+        rho = 2.5   # config.ST.rho
+
+        # Extracts the batchsize
+        batch_size = x.shape[0]
+        # Grayscale image since structure tensors can't handle colors
+        x = transforms.Grayscale()(x)
+        result = []
+        for i in range(batch_size):
+            # x[:,0,...] since structure tensor func needs (height, width)
+            image = x[:,0,...][i].cpu().numpy()
+            S = structure_tensor_2d(image, sigma, rho)
+            result.append(torch.from_numpy(S))
+        return torch.stack(result)
+
+    def forward(self, x, gt):
+        """ https://github.com/dvlab-research/Simple-SR/blob/master/utils/loss.py#L94 """
+        # x and gt: torch.Size([16, 3, 96, 96])
+
+        # Get the gram matrix of the estimated patch and calculate the candidate patches
+        g_x = self.st_mat(x)
+        g_gt = self.st_mat(gt)
+        g_gt2 = self.st_mat(F.interpolate(gt, scale_factor=1/2, mode="bicubic"))
+        g_gt4 = self.st_mat(F.interpolate(gt, scale_factor=1/4, mode="bicubic"))
+        # TODO: Calculate more candidate patches by affine transformations
+
+        # Combine all candidates
+        gt_cat = torch.cat([g_gt, g_gt2, g_gt4], 1) # torch.Size([16, 9, 3])
+
+        # Use Eq. 2
+        score_a = self.alpha * self.batch_pairwise_distance(g_gt, gt_cat)
+        score_b = self.beta * self.batch_pairwise_distance(g_x, gt_cat)
+        score = score_a + score_b
+
+        # Complicated way of taking argmin to get the best patch
+        weight, ind = torch.min(score, dim=2) # [B, H]
+        index = ind.unsqueeze(-1).expand([-1, -1, 3]) 
+        best_patch = torch.gather(gt_cat, dim=1, index=index) # torch.Size([16, 3, 3])
+
+        # Use Eq. 4
+        loss = self.criterion(g_x, best_patch)
+
+        return loss
+
 # class STLoss(BBLoss):
 
 #     def __init__(self, alpha=1, beta=1, ksize=3, pad=0, stride=3, dist_norm='l2', criterion='l1'):
+        
+
 #         super().__init__(alpha, beta, ksize, pad, stride, dist_norm, criterion)
 
-#     def st_mat(self, x):
-#         """
-#         Computes the gram matrix
-
-#         in: torch.Size([16, 3, 96, 96])
-#         out: torch.Size([16, 3, 3])
-#         """
-#         n, c, h, w = x.size()
-#         features = x.view(n, c, w * h)
-#         features_t = features.transpose(1, 2)
-#         gram = features.bmm(features_t) / (c * h * w)
-#         return gram
-
 #     def forward(self, x, gt):
-#         """ https://github.com/dvlab-research/Simple-SR/blob/master/utils/loss.py#L94 """
-#         # x and gt: torch.Size([16, 3, 96, 96])
+#         p1 = F.unfold(x, kernel_size=self.ksize, padding=self.pad, stride=self.stride)
+#         B, C, H = p1.size()
+#         p1 = p1.permute(0, 2, 1).contiguous() # [B, H, C]
 
-#         # Get the gram matrix of the estimated patch and calculate the candidate patches
-#         g_x = self.st_mat(x)
-#         g_gt = self.st_mat(gt)
-#         g_gt2 = self.st_mat(F.interpolate(gt, scale_factor=1/2, mode="bicubic"))
-#         g_gt4 = self.st_mat(F.interpolate(gt, scale_factor=1/4, mode="bicubic"))
-#         # TODO: Calculate more candidate patches by affine transformations
+#         p2 = F.unfold(gt, kernel_size=self.ksize, padding=self.pad, stride=self.stride)
+#         p2 = p2.permute(0, 2, 1).contiguous() # [B, H, C]
 
-#         # Combine all candidates
-#         gt_cat = torch.cat([g_gt, g_gt2, g_gt4], 1) # torch.Size([16, 9, 3])
+#         gt_2 = F.interpolate(gt, scale_factor=0.5, mode='bicubic', align_corners = False)
+#         p2_2 = F.unfold(gt_2, kernel_size=self.ksize, padding=self.pad, stride=self.stride)
+#         p2_2 = p2_2.permute(0, 2, 1).contiguous() # [B, H, C]
 
-#         # Use Eq. 2
-#         score_a = self.alpha * self.batch_pairwise_distance(g_gt, gt_cat)
-#         score_b = self.beta * self.batch_pairwise_distance(g_x, gt_cat)
-#         score = score_a + score_b
+#         gt_4 = F.interpolate(gt, scale_factor=0.25, mode='bicubic',align_corners = False)
+#         p2_4 = F.unfold(gt_4, kernel_size=self.ksize, padding=self.pad, stride=self.stride)
+#         p2_4 = p2_4.permute(0, 2, 1).contiguous() # [B, H, C]
+#         p2_cat = torch.cat([p2, p2_2, p2_4], 1)
+        
+#         p1 = 
+#         p2 = 
+#         p2_cat = 
 
-#         # Complicated way of taking argmin to get the best patch
+#         score1 = self.alpha * self.batch_pairwise_distance(p1, p2_cat)
+#         score = score1 + self.beta * self.batch_pairwise_distance(p2, p2_cat) # [B, H, H]
+
 #         weight, ind = torch.min(score, dim=2) # [B, H]
-#         index = ind.unsqueeze(-1).expand([-1, -1, 3]) 
-#         best_patch = torch.gather(gt_cat, dim=1, index=index) # torch.Size([16, 3, 3])
+#         index = ind.unsqueeze(-1).expand([-1, -1, C]) # [B, H, C]
+#         sel_p2 = torch.gather(p2_cat, dim=1, index=index) # [B, H, C]
 
-#         # Use Eq. 4
-#         loss = self.criterion(g_x, best_patch)
+#         loss = self.criterion(p1, sel_p2)
 
 #         return loss
-
-# # class STLoss(BBLoss):
-
-# #     def __init__(self, alpha=1, beta=1, ksize=3, pad=0, stride=3, dist_norm='l2', criterion='l1'):
-        
-
-# #         super().__init__(alpha, beta, ksize, pad, stride, dist_norm, criterion)
-
-# #     def forward(self, x, gt):
-# #         p1 = F.unfold(x, kernel_size=self.ksize, padding=self.pad, stride=self.stride)
-# #         B, C, H = p1.size()
-# #         p1 = p1.permute(0, 2, 1).contiguous() # [B, H, C]
-
-# #         p2 = F.unfold(gt, kernel_size=self.ksize, padding=self.pad, stride=self.stride)
-# #         p2 = p2.permute(0, 2, 1).contiguous() # [B, H, C]
-
-# #         gt_2 = F.interpolate(gt, scale_factor=0.5, mode='bicubic', align_corners = False)
-# #         p2_2 = F.unfold(gt_2, kernel_size=self.ksize, padding=self.pad, stride=self.stride)
-# #         p2_2 = p2_2.permute(0, 2, 1).contiguous() # [B, H, C]
-
-# #         gt_4 = F.interpolate(gt, scale_factor=0.25, mode='bicubic',align_corners = False)
-# #         p2_4 = F.unfold(gt_4, kernel_size=self.ksize, padding=self.pad, stride=self.stride)
-# #         p2_4 = p2_4.permute(0, 2, 1).contiguous() # [B, H, C]
-# #         p2_cat = torch.cat([p2, p2_2, p2_4], 1)
-        
-# #         p1 = 
-# #         p2 = 
-# #         p2_cat = 
-
-# #         score1 = self.alpha * self.batch_pairwise_distance(p1, p2_cat)
-# #         score = score1 + self.beta * self.batch_pairwise_distance(p2, p2_cat) # [B, H, H]
-
-# #         weight, ind = torch.min(score, dim=2) # [B, H]
-# #         index = ind.unsqueeze(-1).expand([-1, -1, C]) # [B, H, C]
-# #         sel_p2 = torch.gather(p2_cat, dim=1, index=index) # [B, H, C]
-
-# #         loss = self.criterion(p1, sel_p2)
-
-# #         return loss
