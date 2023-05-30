@@ -13,117 +13,20 @@
 # ==============================================================================
 import math
 import torch
-import functools
 
 from torch import Tensor
 from torch import nn
-import torch.nn.functional as F
 
 from config import Config
 
-
-# class Generator(nn.Module):
-#     def __init__(self, in_nc, out_nc, nf, nb, gc=32):
-#         super(Generator, self).__init__()
-#         RRDB_block_f = functools.partial(RRDB, nf=nf, gc=gc)
-
-#         self.conv_first = nn.Conv2d(in_nc, nf, 3, 1, 1, bias=True)
-#         self.RRDB_trunk = make_layer(RRDB_block_f, nb)
-#         self.trunk_conv = nn.Conv2d(nf, nf, 3, 1, 1, bias=True)
-#         #### upsampling
-#         self.upconv1 = nn.Conv2d(nf, nf, 3, 1, 1, bias=True)
-#         self.upconv2 = nn.Conv2d(nf, nf, 3, 1, 1, bias=True)
-#         self.HRconv = nn.Conv2d(nf, nf, 3, 1, 1, bias=True)
-#         self.conv_last = nn.Conv2d(nf, out_nc, 3, 1, 1, bias=True)
-
-#         self.lrelu = nn.LeakyReLU(negative_slope=0.2, inplace=True)
-
-#     def forward(self, x):
-#         fea = self.conv_first(x)
-#         trunk = self.trunk_conv(self.RRDB_trunk(fea))
-#         fea = fea + trunk
-
-#         fea = self.lrelu(self.upconv1(F.interpolate(fea, scale_factor=2, mode='nearest')))
-#         fea = self.lrelu(self.upconv2(F.interpolate(fea, scale_factor=2, mode='nearest')))
-#         out = self.conv_last(self.lrelu(self.HRconv(fea)))
-
-#         return out
-
-
-# class Discriminator(nn.Module):
-#     def __init__(self, in_chl, nf):
-#         super(Discriminator, self).__init__()
-#         # in: [in_chl, 192, 192]
-#         # self.conv0_0 = nn.Conv2d(in_chl, nf, 3, 1, 1, bias=True)
-#         # self.conv0_1 = nn.Conv2d(nf, nf, 4, 2, 1, bias=False)
-#         # self.bn0_1 = nn.BatchNorm2d(nf, affine=True)
-#         # [nf, 96, 96]
-#         # self.conv1_0 = nn.Conv2d(nf, nf * 2, 3, 1, 1, bias=False)
-#         self.conv1_0 = nn.Conv2d(in_chl, nf * 2, 3, 1, 1, bias=False)
-#         self.bn1_0 = nn.BatchNorm2d(nf * 2, affine=True)
-#         self.conv1_1 = nn.Conv2d(nf * 2, nf * 2, 4, 2, 1, bias=False)
-#         self.bn1_1 = nn.BatchNorm2d(nf * 2, affine=True)
-#         # [nf*2, 48, 48]
-#         self.conv2_0 = nn.Conv2d(nf * 2, nf * 4, 3, 1, 1, bias=False)
-#         self.bn2_0 = nn.BatchNorm2d(nf * 4, affine=True)
-#         self.conv2_1 = nn.Conv2d(nf * 4, nf * 4, 4, 2, 1, bias=False)
-#         self.bn2_1 = nn.BatchNorm2d(nf * 4, affine=True)
-#         # [nf*4, 24, 24]
-#         self.conv3_0 = nn.Conv2d(nf * 4, nf * 8, 3, 1, 1, bias=False)
-#         self.bn3_0 = nn.BatchNorm2d(nf * 8, affine=True)
-#         self.conv3_1 = nn.Conv2d(nf * 8, nf * 8, 4, 2, 1, bias=False)
-#         self.bn3_1 = nn.BatchNorm2d(nf * 8, affine=True)
-#         # [nf*8, 12, 12]
-#         self.conv4_0 = nn.Conv2d(nf * 8, nf * 8, 3, 1, 1, bias=False)
-#         self.bn4_0 = nn.BatchNorm2d(nf * 8, affine=True)
-#         self.conv4_1 = nn.Conv2d(nf * 8, nf * 8, 4, 2, 1, bias=False)
-#         self.bn4_1 = nn.BatchNorm2d(nf * 8, affine=True)
-#         # [nf*8, 6, 6]
-#         self.conv5_0 = nn.Conv2d(nf * 8, nf * 8, 3, 1, 1, bias=False)
-#         self.bn5_0 = nn.BatchNorm2d(nf * 8, affine=True)
-#         self.conv5_1 = nn.Conv2d(nf * 8, nf * 8, 4, 2, 1, bias=False)
-#         self.bn5_1 = nn.BatchNorm2d(nf * 8, affine=True)
-#         # [nf*8, 3, 3]
-#         self.linear1 = nn.Linear(nf * 8 * 3 * 3, 100)
-#         self.linear2 = nn.Linear(100, 1)
-
-#         # activation function
-#         self.lrelu = nn.LeakyReLU(negative_slope=0.2, inplace=True)
-
-#     def forward(self, x):
-#         # fea = self.lrelu(self.conv0_0(x))
-#         # fea = self.lrelu(self.bn0_1(self.conv0_1(fea)))
-
-#         fea = self.lrelu(self.bn1_0(self.conv1_0(x)))
-#         fea = self.lrelu(self.bn1_1(self.conv1_1(fea)))
-
-#         fea = self.lrelu(self.bn2_0(self.conv2_0(fea)))
-#         fea = self.lrelu(self.bn2_1(self.conv2_1(fea)))
-
-#         fea = self.lrelu(self.bn3_0(self.conv3_0(fea)))
-#         fea = self.lrelu(self.bn3_1(self.conv3_1(fea)))
-
-#         fea = self.lrelu(self.bn4_0(self.conv4_0(fea)))
-#         fea = self.lrelu(self.bn4_1(self.conv4_1(fea)))
-
-#         fea = self.lrelu(self.bn5_0(self.conv5_0(fea)))
-#         fea = self.lrelu(self.bn5_1(self.conv5_1(fea)))
-
-#         fea = fea.view(fea.size(0), -1)
-#         fea = self.lrelu(self.linear1(fea))
-#         out = self.linear2(fea)
-#         return torch.sigmoid(out)
-
-
-
 class Discriminator(nn.Module):
-    def __init__(self) -> None:
+    def __init__(self, config: Config) -> None:
+        """ Note: only support 96x96 images atm """
         super(Discriminator, self).__init__()
 
-        # TODO: Add to config
-        in_channels = 3
-        out_channels = 1
-        channels = 64
+        in_channels = config.MODEL.D_IN_CHANNEL
+        channels = config.MODEL.D_N_CHANNEL
+        out_channels = config.MODEL.D_OUT_CHANNEL
 
         self.features = nn.Sequential(
             # input size. (3) x 192 x 192
@@ -179,11 +82,12 @@ class Generator(nn.Module):
             config: Config
     ) -> None:
         super(Generator, self).__init__()
-        in_channels: int = 3
-        out_channels: int = 3
-        channels: int = 64
-        num_rcb: int = 16 # TODO : CONFIG
-        upscale: int = 4 
+        in_channels: int = config.MODEL.G_IN_CHANNEL
+        out_channels: int = config.MODEL.G_OUT_CHANNEL
+        channels: int = config.MODEL.G_N_CHANNEL
+        num_rcb: int = config.MODEL.G_N_RCB
+        upscale: int = config.DATA.UPSCALE_FACTOR
+
         # Low frequency information extraction layer
         self.conv1 = nn.Sequential(
             nn.Conv2d(in_channels, channels, (9, 9), (1, 1), (4, 4)),

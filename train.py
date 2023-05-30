@@ -24,7 +24,7 @@ def train(config: Config = None):
     loss_values = dict()
 
     # Define models
-    discriminator = Discriminator().to(config.DEVICE)
+    discriminator = Discriminator(config).to(config.DEVICE)
     generator = Generator(config).to(config.DEVICE)
 
     # Should model weights be loaded from warmup?

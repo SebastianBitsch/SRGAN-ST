@@ -113,7 +113,6 @@ def batch_pairwise_distance(x, y=None, dist_norm = 'l1'):
             y_t = torch.transpose(x, 1, 2)
             y_norm = x_norm.view(B, 1, N)
 
-        print(x_norm.shape, y_norm.shape, x.shape, y_t.shape)
         dist = x_norm + y_norm - 2.0 * torch.bmm(x, y_t)
         # Ensure diagonal is zero if x=y
         if y is None:
@@ -161,7 +160,6 @@ class BestBuddyLoss(nn.Module):
         p2_4 = p2_4.permute(0, 2, 1).contiguous() # [B, H, C]
         p2_cat = torch.cat([p2, p2_2, p2_4], 1)
 
-        print("bb",p1.shape, p2_cat.shape)
         score1 = self.alpha * batch_pairwise_distance(p1, p2_cat, self.dist_norm)
         score = score1 + self.beta * batch_pairwise_distance(p2, p2_cat, self.dist_norm) # [B, H, H]
 
@@ -233,7 +231,6 @@ class GramLoss(nn.Module):
         p2_4 = self.do_work(gt_4)
         p2_cat = torch.cat([p2, p2_2, p2_4], 1)
 
-        print(p1.shape, p2_cat.shape)
         score1 = self.alpha * batch_pairwise_distance(p1, p2_cat, self.dist_norm)
         score = score1 + self.beta * batch_pairwise_distance(p2, p2_cat, self.dist_norm) # [B, H, H]
 

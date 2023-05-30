@@ -77,7 +77,8 @@ class Config():
         "Pixel"         : 1.0
     }
     MODEL.D_IN_CHANNEL = 3
-    MODEL.D_N_CHANNEL = 32
+    MODEL.D_OUT_CHANNEL = 1
+    MODEL.D_N_CHANNEL = 64
 
     # Solver
     SOLVER = dotdict()
