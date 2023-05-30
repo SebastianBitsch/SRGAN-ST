@@ -40,5 +40,5 @@ d_grayscale = d_grayscale.sum(0)
 print(d_grayscale.shape)
 d_feature_image = d_grayscale.cpu().detach().numpy()  # convert tensor to numpy array
 # save the feature_image numpy array
-np.save('data/features/D_feature_image.npy', d_feature_image)
+#np.save('data/features/D_feature_image.npy', d_feature_image)
 
