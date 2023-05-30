@@ -39,24 +39,25 @@ class TrainImageDataset(Dataset):
         # Read a batch of image data
         im_path = self.image_file_names[batch_index]
 
-        gt_tensor = read_image(im_path).float().unsqueeze(0) / 255.0
-        lr_tensor = F.interpolate(gt_tensor, align_corners = True, scale_factor = 1.0 / self.upscale_factor, mode='bicubic', antialias=True).clamp(min=0, max=1.0)
-        gt_tensor = gt_tensor.squeeze()
-        lr_tensor = lr_tensor.squeeze()
+        # Works, and seems easier; but gives a way worse PSNR value, the downscaling is probably bad
+        # gt_tensor = read_image(im_path).float().unsqueeze(0) / 255.0
+        # lr_tensor = F.interpolate(gt_tensor, align_corners = True, scale_factor = 1.0 / self.upscale_factor, mode='bicubic', antialias=True).clamp(min=0, max=1.0)
+        # gt_tensor = gt_tensor.squeeze()
+        # lr_tensor = lr_tensor.squeeze()
 
         # Read GT image and generate LR
-        # gt_image = cv2.imread(im_path).astype(np.float32) / 255.
-        # lr_image = imgproc.image_resize(gt_image, 1 / self.upscale_factor)
+        gt_image = cv2.imread(im_path).astype(np.float32) / 255.
+        lr_image = imgproc.image_resize(gt_image, 1 / self.upscale_factor)
 
-        # # BGR convert RGB
-        # gt_image = cv2.cvtColor(gt_image, cv2.COLOR_BGR2RGB)
-        # lr_image = cv2.cvtColor(lr_image, cv2.COLOR_BGR2RGB)
+        # BGR convert RGB
+        gt_image = cv2.cvtColor(gt_image, cv2.COLOR_BGR2RGB)
+        lr_image = cv2.cvtColor(lr_image, cv2.COLOR_BGR2RGB)
 
-        # # Convert image data into Tensor stream format (PyTorch).
-        # # Note: The range of input and output is between [0, 1]
-        # gt_tensor = imgproc.image_to_tensor(gt_image, False, False)
-        # lr_tensor = imgproc.image_to_tensor(lr_image, False, False)
-        # print("gt, shaep", gt_tensor.shape, lr_tensor.shape)
+        # Convert image data into Tensor stream format (PyTorch).
+        # Note: The range of input and output is between [0, 1]
+        gt_tensor = imgproc.image_to_tensor(gt_image, False, False)
+        lr_tensor = imgproc.image_to_tensor(lr_image, False, False)
+        
         return gt_tensor, lr_tensor
 
     def __len__(self) -> int:
@@ -78,20 +79,21 @@ class TestImageDataset(Dataset):
 
     def __getitem__(self, batch_index: int) -> tuple[Tensor, Tensor]:
         # Read a batch of image data
-        # gt_image = cv2.imread(self.gt_image_file_names[batch_index]).astype(np.float32) / 255.
-        # lr_image = cv2.imread(self.lr_image_file_names[batch_index]).astype(np.float32) / 255.
+        gt_image = cv2.imread(self.gt_image_file_names[batch_index]).astype(np.float32) / 255.
+        lr_image = cv2.imread(self.lr_image_file_names[batch_index]).astype(np.float32) / 255.
 
-        # # BGR convert RGB
-        # gt_image = cv2.cvtColor(gt_image, cv2.COLOR_BGR2RGB)
-        # lr_image = cv2.cvtColor(lr_image, cv2.COLOR_BGR2RGB)
+        # BGR convert RGB
+        gt_image = cv2.cvtColor(gt_image, cv2.COLOR_BGR2RGB)
+        lr_image = cv2.cvtColor(lr_image, cv2.COLOR_BGR2RGB)
 
-        # # Convert image data into Tensor stream format (PyTorch).
-        # # Note: The range of input and output is between [0, 1]
-        # gt_tensor = imgproc.image_to_tensor(gt_image, False, False)
-        # lr_tensor = imgproc.image_to_tensor(lr_image, False, False)
+        # Convert image data into Tensor stream format (PyTorch).
+        # Note: The range of input and output is between [0, 1]
+        gt_tensor = imgproc.image_to_tensor(gt_image, False, False)
+        lr_tensor = imgproc.image_to_tensor(lr_image, False, False)
 
-        gt_tensor = read_image(self.gt_image_file_names[batch_index]).float() / 255.0
-        lr_tensor = read_image(self.lr_image_file_names[batch_index]).float() / 255.0
+        # Works, and seems easier; but gives a way worse PSNR value, the downscaling is probably bad
+        # gt_tensor = read_image(self.gt_image_file_names[batch_index]).float() / 255.0
+        # lr_tensor = read_image(self.lr_image_file_names[batch_index]).float() / 255.0
 
         return gt_tensor, lr_tensor
 
