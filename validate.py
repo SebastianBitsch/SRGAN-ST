@@ -1,9 +1,15 @@
 import cv2
-import numpy as np
-import torch
+import os
 import math
-from torchvision.utils import make_grid
 
+import numpy as np
+from torchvision.utils import make_grid, save_image
+import torch
+
+from config import Config
+from torch.utils.data import DataLoader
+from dataset import TestImageDataset
+from model import Generator
 
 def tensor2img(tensor, out_type=np.uint8, min_max=(0, 1)):
     # 4D: grid (B, C, H, W), 3D: (C, H, W), 2D: (H, W)
@@ -64,29 +70,6 @@ def calculate_ssim(img1, img2):
     return ssim_map.mean()
 
 
-def rgb2ycbcr(img, only_y=True):
-    '''same as matlab rgb2ycbcr
-    only_y: only return Y channel
-    Input:
-        uint8, [0, 255]
-        float, [0, 1]
-    '''
-    in_img_type = img.dtype
-    img.astype(np.float32)
-    if in_img_type != np.uint8:
-        img *= 255.
-    # convert
-    if only_y:
-        rlt = np.dot(img, [65.481, 128.553, 24.966]) / 255.0 + 16.0
-    else:
-        rlt = np.matmul(img, [[65.481, -37.797, 112.0], [128.553, -74.203, -93.786],
-                              [24.966, 112.0, -18.214]]) / 255.0 + [16, 128, 128]
-    if in_img_type == np.uint8:
-        rlt = rlt.round()
-    else:
-        rlt /= 255.
-    return rlt.astype(in_img_type)
-
 
 def bgr2ycbcr(img, only_y=True):
     '''bgr version of rgb2ycbcr
@@ -112,49 +95,60 @@ def bgr2ycbcr(img, only_y=True):
     return rlt.astype(in_img_type)
 
 
-def ycbcr2rgb(img):
-    '''same as matlab ycbcr2rgb
-    Input:
-        uint8, [0, 255]
-        float, [0, 1]
-    '''
-    in_img_type = img.dtype
-    img.astype(np.float32)
-    if in_img_type != np.uint8:
-        img *= 255.
-    # convert
-    rlt = np.matmul(img, [[0.00456621, 0.00456621, 0.00456621], [0, -0.00153632, 0.00791071],
-                          [0.00625893, -0.00318811, 0]]) * 255.0 + [-222.921, 135.576, -276.836]
-    if in_img_type == np.uint8:
-        rlt = rlt.round()
-    else:
-        rlt /= 255.
-    return rlt.astype(in_img_type)
+def test(config: Config, save_images: bool = True, g_path: str = None):
+    """
+    Test a generator, if not path to generator is given the generator at current exp-name is used.
+    """
+    if not g_path:
+        g_path = f"results/{config.EXP.NAME}/g_best.pth"
+    
+    test_datasets = TestImageDataset(config.DATA.TEST_GT_IMAGES_DIR, config.DATA.TEST_LR_IMAGES_DIR)
+
+    test_dataloader = DataLoader(
+        dataset = test_datasets,
+        batch_size = 1,
+        shuffle = False,
+        num_workers = 1,
+        pin_memory = True,
+        drop_last = False,
+        persistent_workers = True,
+    )
+
+    # Initialize the super-resolution bsrgan_model
+    generator = Generator(config).to(config.DEVICE)
+    generator.load_state_dict(torch.load(g_path))
+
+    # Test
+    psnr, ssim = _validate(generator=generator, val_laoder=test_dataloader, config=config, save_images=save_images)
+    print(f"[Test] [PSNR: {psnr}] [SSIM: {ssim}]")
 
 
-def validate(generator, val_loader, config):
+def _validate(generator: Generator, val_loader: DataLoader, config: Config, save_images:bool = False) -> tuple[float, float]:
+    """ Run testing on a generator with a given dataset """
     with torch.no_grad():
         psnr_l = []
         ssim_l = []
 
         for idx, (hr_img, lr_img) in enumerate(val_loader):
-            lr_img = lr_img.to(config.MODEL.DEVICE)
-            hr_img = hr_img.to(config.MODEL.DEVICE)
+            lr_img = lr_img.to(config.DEVICE)
+            hr_img = hr_img.to(config.DEVICE)
 
             output = generator(lr_img)
 
             output = tensor2img(output)
             gt = tensor2img(hr_img)
 
-            cv2.imwrite(f"{idx}.png", np.concatenate([output, gt], axis=1))
+            # Save SR images
+            if save_images:
+                path = os.path.join(config.DATA.TEST_SR_IMAGES_DIR, config.EXP.NAME)
+                os.makedirs(path, exist_ok=True)
+                cv2.imwrite(f"{path}/{idx}.png", np.concatenate([output, gt], axis=1))
 
             output = output.astype(np.float32) / 255.0
             gt = gt.astype(np.float32) / 255.0
 
-
             output = bgr2ycbcr(output, only_y=True)
             gt = bgr2ycbcr(gt, only_y=True)
-
             psnr = calculate_psnr(output * 255, gt * 255)
             ssim = calculate_ssim(output * 255, gt * 255)
             psnr_l.append(psnr)
@@ -164,3 +158,11 @@ def validate(generator, val_loader, config):
         avg_ssim = sum(ssim_l) / len(ssim_l)
 
     return avg_psnr, avg_ssim
+
+
+if __name__ == "__main__":
+    config = Config()
+    config.EXP.NAME = ""
+    gpath = ""
+
+    test(config = config, save_images = True, g_path=gpath)
