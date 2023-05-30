@@ -1,13 +1,14 @@
 import torch
 import numpy as np
-
+from collections import defaultdict
 from torch import nn, Tensor
+from functools import reduce
 
 import torch.nn.functional as F
 from torchvision import models
 from torchvision import transforms
 from torchvision.models.feature_extraction import create_feature_extractor
-
+from model import Discriminator
 
 class ContentLoss(nn.Module):
     """Constructs a content loss function based on the VGG19 network.
@@ -241,3 +242,66 @@ class GramLoss(nn.Module):
         loss = self.criterion(p1, sel_p2)
 
         return loss
+
+
+
+class DiscriminatorFeaturesLoss(nn.Module):
+    
+    def __init__(self, discriminator: Discriminator, extraction_layers: dict[int, float], config) -> None:
+        super(DiscriminatorFeaturesLoss, self).__init__()
+        
+        # Add hooks to all the layers which will update the self.activations value whenever forwards is called on the model
+        for layer_name, _ in extraction_layers.items():
+            layer = self.get_layer_by_name(discriminator, layer_name)
+            layer.register_forward_hook(self.get_activation(layer_name))
+
+        self.device = config.DEVICE
+        self.activations = defaultdict(list)
+        self.extraction_layers = extraction_layers
+
+
+    def get_layer_by_name(self, layer, access_string):
+        """ Get a reference to a given layer of a torch network"""
+        names = access_string.split(sep='.')
+        return reduce(getattr, names, layer)
+
+
+    def get_activation(self, name):
+        def hook(_model, _input, output):
+            # input: torch.Size([1, 64, 46, 46])
+            self.activations[name].append(output.detach())
+        return hook
+
+
+    def forward(self, _x, _gt):
+        """
+        Inputs _x and _gt arent used as the values we really need (the activations) will 
+        already have been written to self.activations via the webhook. This happens during 
+        the forward pass of the discriminator
+        """
+        loss = torch.tensor(0.0, device=self.device)
+        for layer_name, (x, gt) in self.activations.items():
+            weight = self.extraction_layers[layer_name]
+            # loss += weight * torch.nn.L1Loss(reduction='mean')(x, gt)
+            loss += weight * F.mse_loss(x, gt)
+
+        # Clear the dict
+        self.activations = defaultdict(list)
+        return loss
+
+"""
+from config import Config
+from model import Discriminator
+from loss import DiscriminatorFeaturesLoss
+import torch 
+
+c = Config()
+d = Discriminator(c)
+l = DiscriminatorFeaturesLoss(d)
+
+r = torch.randn([1,3,92,92])
+d(r)
+d(r*0.5)
+l(1,2)
+
+"""

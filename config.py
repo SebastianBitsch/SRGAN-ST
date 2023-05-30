@@ -57,10 +57,13 @@ class Config():
         "features.26" : 1/4,
         "features.35" : 1/2
     }
+    MODEL.G_LOSS.DISC_FEATURES_LOSS_LAYERS = {
+        "features.5" : 1.0
+    }
     # The loss functions used in the generator by default. More can be added after instantiating
     MODEL.G_LOSS.CRITERIONS = {
         "Adversarial"   : nn.BCEWithLogitsLoss(),
-        "Content"       : ContentLoss(MODEL.G_LOSS.VGG19_LAYERS, device=MODEL.DEVICE),
+        "Content"       : ContentLoss(MODEL.G_LOSS.VGG19_LAYERS, device=DEVICE),
         "Pixel"         : nn.MSELoss(),
     }
     # How to weigh the loss functions used in the generator

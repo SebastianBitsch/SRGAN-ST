@@ -17,10 +17,8 @@ import torch
 from torch import Tensor
 from torch import nn
 
-from config import Config
-
 class Discriminator(nn.Module):
-    def __init__(self, config: Config) -> None:
+    def __init__(self, config) -> None:
         """ Note: only support 96x96 images atm """
         super(Discriminator, self).__init__()
 
@@ -79,7 +77,7 @@ class Discriminator(nn.Module):
 class Generator(nn.Module):
     def __init__(
             self,
-            config: Config
+            config
     ) -> None:
         super(Generator, self).__init__()
         in_channels: int = config.MODEL.G_IN_CHANNEL
