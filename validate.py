@@ -119,7 +119,7 @@ def test(config: Config, save_images: bool = True, g_path: str = None):
     generator.load_state_dict(torch.load(g_path))
 
     # Test
-    psnr, ssim = _validate(generator=generator, val_laoder=test_dataloader, config=config, save_images=save_images)
+    psnr, ssim = _validate(generator=generator, val_loader=test_dataloader, config=config, save_images=save_images)
     print(f"[Test] [PSNR: {psnr}] [SSIM: {ssim}]")
 
 
@@ -162,7 +162,7 @@ def _validate(generator: Generator, val_loader: DataLoader, config: Config, save
 
 if __name__ == "__main__":
     config = Config()
-    config.EXP.NAME = ""
-    gpath = ""
+    config.EXP.NAME = "stock-srgan"
+    # gpath = ""
 
-    test(config = config, save_images = True, g_path=gpath)
+    test(config = config, save_images = True)

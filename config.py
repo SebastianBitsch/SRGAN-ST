@@ -23,7 +23,6 @@ class Config():
     EXP.NAME = "experiment-name"
     EXP.START_EPOCH = 0             # Whether to resume training at some epoch number or start at epoch 0
     EXP.N_EPOCHS = 20               # Number of epochs to train for
-    EXP.N_WARMUP_BATCHES = 0        # Number of epochs to warm up the generator before the discriminator starts learning
     EXP.LABEL_SMOOTHING = 0.0       # One-sided label smoothing. The true label will be 1.0 - label_smoothing
 
     # Logging options

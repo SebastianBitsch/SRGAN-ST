@@ -131,25 +131,6 @@ def train(config: Config = None):
             generator.zero_grad()
 
             sr = generator(lr)
-            
-            # # Warmup generator
-            # if batches_done < config.EXP.N_WARMUP_BATCHES:
-
-            #     # Calculate loss for the warmup criterions
-            #     warmup_loss = torch.tensor(0.0, device=config.DEVICE)
-            #     for name in config.MODEL.G_LOSS.WARMUP_CRITERIONS:
-            #         fn = config.MODEL.G_LOSS.CRITERIONS[name]
-            #         weight = config.MODEL.G_LOSS.CRITERION_WEIGHTS[name]
-            #         warmup_loss += fn(sr, gt) * weight
-
-            #     warmup_loss.backward()
-            #     g_optimizer.step()
-            #     g_scheduler.step()
-
-            #     writer.add_scalar("Train/G_Loss", warmup_loss.item(), batches_done)
-            #     if batch_num % config.LOG_TRAIN_PERIOD == 0:
-            #         print(f"[Epoch {epoch+1}/{config.EXP.N_EPOCHS}] [Batch {batch_num}/{len(train_dataloader)}] [Warmup loss: {warmup_loss.item()}]")
-            #     continue
 
             # pred_gt = discriminator(gt)
             # pred_sr = discriminator(sr).detach()
@@ -217,9 +198,7 @@ def train(config: Config = None):
             # Print to terminal / log
             print(f"[Epoch {epoch+1}/{config.EXP.N_EPOCHS}] [Batch {batch_num}/{len(train_dataloader)}] [D loss: {d_loss.item()}] [G loss: {g_loss.item()}] [G losses: {loss_values}]")
 
-        # Dont do validating if we are warming up
-        if batches_done < config.EXP.N_WARMUP_BATCHES:
-            continue
+
         # ----------------
         #  Validate
         # ----------------

@@ -30,11 +30,11 @@ def warmup_experiment(config: Config, index:int) -> Config:
 
 def srgan_bbgan(config: Config, index:int) -> Config:
     """ stock srgan vs bbgan"""
-    config.EXP.NAME = ['plain-srgan-rewrite', 'plain-bbgan-rewrite'][index]
-    config.EXP.LABEL_SMOOTHING = 0.1
-    config.EXP.N_WARMUP_BATCHES = 5000
+    config.EXP.NAME = ['stock-srgan-w-pixel', 'stock-bbgan-w-pixel'][index]
+    config.MODEL.CONTINUE_FROM_WARMUP = True
+    config.MODEL.WARMUP_WEIGHTS = "results/resnet20/g_best.pth"
     if index == 1:
-        config.add_g_criterion("BestBuddy", BestBuddyLoss(), 10.0)
+        config.add_g_criterion("BestBuddy", BestBuddyLoss(), 1.0)
     return config
 
 
@@ -53,13 +53,13 @@ if __name__ == "__main__":
 
     # config = test_gramloss(config)
     # config = srgan(config)
-    config = resnet(config)
+    config = srgan_bbgan(config, job_index)
 
     print(f"Running job: {job_index}")
 
-    warmup(config = config)
+    # warmup(config = config)
 
-    # train(config = config)
+    train(config = config)
 
     # Done mostly just to get some images saved to file
     test(config = config, save_images = True)
