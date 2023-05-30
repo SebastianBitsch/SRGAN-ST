@@ -9,7 +9,7 @@ from model import Generator
 from dataset import TrainImageDataset, TestImageDataset
 
 from utils import init_random_seed
-from validate import validate
+from validate import _validate
 
 def warmup(config: Config = None):
     config.EXP.NAME = f"resnet-{config.EXP.NAME}"
@@ -23,7 +23,7 @@ def warmup(config: Config = None):
     loss_values = dict()
 
     # Define model
-    generator = Generator(config).to(config.MODEL.DEVICE)
+    generator = Generator(config).to(config.DEVICE)
 
     optimizer = torch.optim.Adam(
         params = generator.parameters(),
@@ -74,8 +74,8 @@ def warmup(config: Config = None):
             batches_done += 1
 
             # Transfer in-memory data to CUDA devices to speed up training
-            gt = gt.to(device=config.MODEL.DEVICE, non_blocking=True)
-            lr = lr.to(device=config.MODEL.DEVICE, non_blocking=True)
+            gt = gt.to(device=config.DEVICE, non_blocking=True)
+            lr = lr.to(device=config.DEVICE, non_blocking=True)
 
             # ----------------
             #  Update Generator
@@ -84,9 +84,9 @@ def warmup(config: Config = None):
 
             sr = generator(lr)
             
-            loss = torch.tensor(0.0, device=config.MODEL.DEVICE)
-            for name, criterion in config.RESNET.CRITERIONS.items():
-                weight = config.RESNET.CRITERION_WEIGHTS[name]
+            loss = torch.tensor(0.0, device=config.DEVICE)
+            for name, criterion in config.MODEL.G_LOSS.WARMUP_CRITERIONS.items():
+                weight = config.MODEL.G_LOSS.WARMUP_WEIGHTS[name]
                 l = criterion(sr, gt) * weight
                 loss += l
                 loss_values[name] = l.item() # Used for logging to Tensorboard
@@ -113,7 +113,7 @@ def warmup(config: Config = None):
         # ----------------
         generator.eval()
 
-        psnr, ssim = validate(generator, test_dataloader, config)
+        psnr, ssim = _validate(generator, test_dataloader, config)
 
         # Print training log information
         if batch_num % config.LOG_VALIDATION_PERIOD == 0:

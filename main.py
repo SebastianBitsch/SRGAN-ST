@@ -1,7 +1,8 @@
 import os
 from config import Config
 from train import train
-from test import test
+from warmup_generator import warmup
+from validate import test
 
 from loss import BestBuddyLoss, GramLoss
 
@@ -12,7 +13,12 @@ def get_jobindex(fallback:int = 0) -> int:
 
 
 def srgan(config: Config) -> Config:
-    config.EXP.NAME = "srgan"
+    config.EXP.NAME = "srgan-with-resnet"
+    config.MODEL.CONTINUE_FROM_WARMUP = True
+    return config
+
+def resnet(config: Config) -> Config:
+    config.EXP.NAME = "resnet_recheck"
     return config
 
 def warmup_experiment(config: Config, index:int) -> Config:
@@ -46,12 +52,16 @@ if __name__ == "__main__":
     config = Config()
 
     # config = test_gramloss(config)
-    config = srgan(config)
+    # config = srgan(config)
+    config = resnet(config)
 
     print(f"Running job: {job_index}")
-    train(config = config)
+
+    warmup(config = config)
+
+    # train(config = config)
 
     # Done mostly just to get some images saved to file
-    test(config = config)
+    test(config = config, save_images = True)
 
     print(f"Finished job: {job_index}")

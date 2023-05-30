@@ -17,10 +17,9 @@ config = Config()
 g_path = f"results/bbgan-label-smoothing-x10-loss/g_best.pth"
 
 # Initialize the super-resolution bsrgan_model
-generator = model.Generator(config).to(config.MODEL.DEVICE)
+generator = model.Generator(config).to(config.DEVICE)
 generator.load_state_dict(torch.load(g_path))
 
-# lr_tensor1 = imgproc.preprocess_one_image("/work3/s204163/data/Urban100/LRbicx4/img_062.png", config.MODEL.DEVICE)
 f = "/work3/s204163/data/Urban100/GTmod12/img_059.png"
 gt_tensor = read_image(f).float().unsqueeze(0) / 255.0
 print(gt_tensor.shape)

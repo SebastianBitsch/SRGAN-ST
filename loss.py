@@ -40,9 +40,6 @@ class ContentLoss(nn.Module):
         # Extract the thirty-sixth layer output in the VGG19 model as the content loss.
         self.feature_extractor = create_feature_extractor(model, list(extraction_layers))
 
-        # set to validation mode
-        self.feature_extractor.eval()
-
         # This is the VGG model preprocessing method of the ImageNet dataset.
         # The mean and std of ImageNet. See: https://stackoverflow.com/questions/58151507/why-pytorch-officially-use-mean-0-485-0-456-0-406-and-std-0-229-0-224-0-2
         self.normalize = transforms.Normalize(mean = [0.485, 0.456, 0.406], std = [0.229, 0.224, 0.225])
@@ -50,6 +47,10 @@ class ContentLoss(nn.Module):
         # Freeze model parameters.
         for model_parameters in self.feature_extractor.parameters():
             model_parameters.requires_grad = False
+
+        # Set to validation mode
+        self.feature_extractor.eval()
+
 
     def __repr__(self):
         return "ContentLoss()"
@@ -59,14 +60,13 @@ class ContentLoss(nn.Module):
         sr_tensor = self.normalize(sr_tensor)
         gt_tensor = self.normalize(gt_tensor)
 
+        sr_feature = self.feature_extractor(sr_tensor)
+        gt_feature = self.feature_extractor(gt_tensor)
+
         # Find the feature map difference between the two images
         loss = torch.tensor(0.0, device = self.device)
         for name, weight in self.extraction_layers.items():
-            sr_feature = self.feature_extractor(sr_tensor)[name]
-            gt_feature = self.feature_extractor(gt_tensor)[name]
-
-            # loss += weight * torch.linalg.vector_norm(sr_feature - gt_feature, ord = 1)
-            loss += weight * F.mse_loss(sr_feature, gt_feature)
+            loss += weight * F.mse_loss(sr_feature[name], gt_feature[name])
         
         return loss
 
