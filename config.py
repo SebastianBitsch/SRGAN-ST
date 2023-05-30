@@ -15,11 +15,14 @@ class dotdict(dict):
     __repr__ = dict.__repr__
 
 class Config():
+
+    DEVICE = "cuda:0"
+
     EXP = dotdict()
     EXP.USER = "s204163"
     EXP.NAME = "experiment-name"
     EXP.START_EPOCH = 0             # Whether to resume training at some epoch number or start at epoch 0
-    EXP.N_EPOCHS = 15               # Number of epochs to train for
+    EXP.N_EPOCHS = 20               # Number of epochs to train for
     EXP.N_WARMUP_BATCHES = 0        # Number of epochs to warm up the generator before the discriminator starts learning
     EXP.LABEL_SMOOTHING = 0.0       # One-sided label smoothing. The true label will be 1.0 - label_smoothing
 
@@ -41,7 +44,8 @@ class Config():
     
     # Model
     MODEL = dotdict()
-    MODEL.DEVICE = 'cuda:0'
+    MODEL.CONTINUE_FROM_WARMUP = False
+    MODEL.WARMUP_WEIGHTS = "results/Resnet-first/g_best.pth"
     # Generator
     MODEL.G_IN_CHANNEL = 3     
     MODEL.G_OUT_CHANNEL = 3
@@ -66,9 +70,12 @@ class Config():
         "Pixel"         : 1.0,
     }
     # A list of criterions the generator should use during warmup
-    MODEL.G_LOSS.WARMUP_CRITERIONS = [
-        "Pixel",
-    ]
+    MODEL.G_LOSS.WARMUP_CRITERIONS = {
+        "Pixel"         : nn.MSELoss()
+    }
+    MODEL.G_LOSS.WARMUP_WEIGHTS = {
+        "Pixel"         : 1.0
+    }
     MODEL.D_IN_CHANNEL = 3
     MODEL.D_N_CHANNEL = 32
 
@@ -80,19 +87,20 @@ class Config():
     SOLVER.D_BETA1 = 0.9
     SOLVER.D_BETA2 = 0.999
     SOLVER.D_WEIGHT_DECAY = 0
-    SOLVER.D_EPS = 1e-8
+    SOLVER.D_EPS = 1e-4
     # Generator
     SOLVER.G_OPTIMIZER = 'Adam'
     SOLVER.G_BASE_LR = 1e-4
     SOLVER.G_BETA1 = 0.9
     SOLVER.G_BETA2 = 0.999
     SOLVER.G_WEIGHT_DECAY = 0
-    SOLVER.G_EPS = 1e-8
+    SOLVER.G_EPS = 1e-4
     
     # Scheduler
     SCHEDULER = dotdict()
     SCHEDULER.STEP_SIZE = EXP.N_EPOCHS // 2
-    SCHEDULER.GAMMA = 0.1
+    SCHEDULER.GAMMA = 0.1 # or 0.5
+
 
     def add_g_criterion(self, name: str, value: nn.Module, weight: float) -> None:
         """ Add a crition to the generator """
