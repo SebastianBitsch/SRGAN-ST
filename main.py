@@ -4,7 +4,7 @@ from train import train
 from warmup_generator import warmup
 from validate import test
 
-from loss import BestBuddyLoss, GramLoss
+from loss import BestBuddyLoss, GramLoss, PatchwiseStructureTensorLoss, StructureTensorLoss
 
 def get_jobindex(fallback:int = 0) -> int:
     """Get the job-index set in bash. This is mostly for array jobs where multiple models are trained in parallel"""
@@ -43,6 +43,15 @@ def test_gramloss(config: Config) -> Config:
     config.add_g_criterion("Gram", GramLoss(), 10.0)
     return config
 
+
+def test_st_losses(config: Config) -> Config:
+    config.EXP.NAME = "st-testing"
+    config.EXP.N_EPOCHS = 3
+    config.add_g_criterion("PatchwiseSTLoss", PatchwiseStructureTensorLoss(sigma=5))
+    config.add_g_criterion("STLoss", StructureTensorLoss(sigma=5))
+    return config
+
+
 if __name__ == "__main__":
 
     # Get job-index from bash, if the job is not an array it will be zero
@@ -51,14 +60,11 @@ if __name__ == "__main__":
     # Edit config based on 
     config = Config()
 
-    # config = test_gramloss(config)
-    # config = srgan(config)
-    config = srgan_bbgan(config, job_index)
 
     print(f"Running job: {job_index}")
 
-    # warmup(config = config)
 
+    config = test_st_losses(config)
     train(config = config)
 
     # Done mostly just to get some images saved to file

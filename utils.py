@@ -115,6 +115,42 @@ def bgr2ycbcr(img:np.ndarray, only_y:bool = True) -> np.ndarray:
     return rlt.astype(in_img_type)
 
 
+def batch_pairwise_distance(x:torch.FloatTensor, y:torch.FloatTensor=None, dist_norm:str = 'l1') -> torch.FloatTensor:
+    '''
+    Input: x is a BxNxd matrix
+            y is an optional BxMxd matirx
+    Output: dist is a BxNxM matrix where dist[b,i,j] is the square norm between x[b,i,:] and y[b,j,:]
+            if y is not given then use 'y=x'.
+    i.e. dist[b,i,j] = ||x[b,i,:]-y[b,j,:]||^2
+    '''
+    B, N, d = x.size()
+    if dist_norm == 'l1':
+        x_norm = x.view(B, N, 1, d)
+        if y is not None:
+            y_norm = y.view(B, 1, -1, d)
+        else:
+            y_norm = x.view(B, 1, -1, d)
+        dist = torch.abs(x_norm - y_norm).sum(dim=3)
+    elif dist_norm == 'l2':
+        x_norm = (x ** 2).sum(dim=2).view(B, N, 1)
+        if y is not None:
+            M = y.size(1)
+            y_t = torch.transpose(y, 1, 2)
+            y_norm = (y ** 2).sum(dim=2).view(B, 1, M)
+        else:
+            y_t = torch.transpose(x, 1, 2)
+            y_norm = x_norm.view(B, 1, N)
+
+        dist = x_norm + y_norm - 2.0 * torch.bmm(x, y_t)
+        # Ensure diagonal is zero if x=y
+        if y is None:
+            dist = dist - torch.diag_embed(torch.diagonal(dist, dim1=-2, dim2=-1), dim1=-2, dim2=-1)
+        dist = torch.clamp(dist, 0.0, np.inf)
+    else:
+        raise NotImplementedError('%s norm has not been supported.' % dist_norm)
+
+    return dist
+
 
 def get_gaussian_kernel(sigma, also_dg=False, radius=None):
     # order only 0 or 1
@@ -123,18 +159,18 @@ def get_gaussian_kernel(sigma, also_dg=False, radius=None):
         radius = max(int(4*sigma + 0.5), 1)  # similar to scipy _gaussian_kernel1d but never smaller than 1
     x = torch.arange(-radius, radius+1)
     
-    sigma2 = sigma * sigma
+    sigma2 = (sigma * sigma) + 1e-12
     phi_x = torch.exp(-0.5 / sigma2 * x**2)
     phi_x = phi_x / phi_x.sum()
     
     if also_dg:
-        return phi_x, phi_x * -x / sigma2
+        return phi_x.cuda(), (phi_x * -x / sigma2).cuda()
     else:
-        return phi_x
+        return phi_x.cuda()
     
 
 
-def structure_tensor(im, sigma = 1, rho = 10):
+def structure_tensor(im:torch.FloatTensor, sigma:float = 1, rho:float = 10) -> torch.FloatTensor:
     '''
     Image is (1,H,W) torch tensor, st is (3,H,W) torch tensor.
     '''
@@ -158,20 +194,17 @@ def structure_tensor(im, sigma = 1, rho = 10):
     return S
 
 
-def normalize(S):
+def normalize(S: torch.FloatTensor, eps:float = 1e-12) -> torch.FloatTensor:
+    """ Normalize a 2x2 matrice using the determinant """
     d = S[0]*S[1] - S[2]**2
-    o = (d==0)  # TODO, deal with this somehow?!
-    i  = o.sum()
-    #S[..., o] = torch.Tensor([[1],[1],[0]])  # identity matrix
-    #d[o] = 1
-    return S/torch.sqrt(d)
+    return S / torch.sqrt(d + eps)
 
 
 def compute_invS1xS2(S1, S2, _normalize = True):
     ''' Pixelwise inv(S1)*S2 for two symmetric 2x2 matrices.'''
     
     if _normalize:
-        S1 = normalize(S1)  
+        S1 = normalize(S1)
         S2 = normalize(S2)   
     A = (S1[1]*S2[0] - S1[2]*S2[2])  # Element M_11
     B = (S1[0]*S2[1] - S1[2]*S2[2])  # Element M_22
@@ -181,29 +214,28 @@ def compute_invS1xS2(S1, S2, _normalize = True):
     out = out.permute(1, 0, 2)
     return out
 
-def compute_eigenvalues(M):
+
+def compute_eigenvalues(M: torch.FloatTensor, eps:float = 1e-12) -> torch.FloatTensor:
     ''' Pixelwise eigenvalues of 2x2 matrix.'''
     
     ApB = M[0] + M[1]
     discriminant = ApB ** 2 - 4 * (M[0] * M[1] - M[2] * M[3]) # THIS SHOULD ALWAYS BE > 0
-    #i = (discriminant<0).sum()
-    #if i>0:
-    #    print(f'We have {i} negative discriminants!')
-    discriminant = torch.clamp(discriminant, min=0)  # TODO, better way of handling this?
+    discriminant = torch.clamp(discriminant, min = 0 + eps)  # TODO, better way of handling this?
     r = torch.sqrt(discriminant)
     l1 = 0.5*(ApB - r)
     l2 = 0.5*(ApB + r)
     return torch.stack((l1, l2), dim=1)
     
-def compute_distance(L):
+
+def compute_distance(L: torch.FloatTensor, eps:float = 1e-12) -> torch.FloatTensor:
     ''' Pixelwise Riemannian distance from eigenvalues'''
     
-    #i = (L<1).sum()
+    # i = (L<1).sum()
     #if i>0:
-    #    print(f'We have {i} eigenvalues smaller than 1!')
+    # print(f'We have {i} eigenvalues smaller than 1!')
     L = torch.clamp(L, min=1)  # TODO, better way of handling this?
     L = torch.log(L)
     L = L**2
     L = L.permute(1,0,2) # OBS
     d = L.sum(dim=0)
-    return torch.sqrt(d)
+    return torch.sqrt(d + eps)

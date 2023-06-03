@@ -105,7 +105,7 @@ class Config():
     SCHEDULER.GAMMA = 0.1 # or 0.5
 
 
-    def add_g_criterion(self, name: str, value: nn.Module, weight: float) -> None:
+    def add_g_criterion(self, name: str, value: nn.Module, weight: float = 1.0) -> None:
         """ Add a crition to the generator """
         self.MODEL.G_LOSS.CRITERIONS[name] = value
         self.MODEL.G_LOSS.CRITERION_WEIGHTS[name] = weight

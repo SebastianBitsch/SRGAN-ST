@@ -1,5 +1,4 @@
 import torch
-import numpy as np
 from collections import defaultdict
 from torch import nn, Tensor
 from functools import reduce
@@ -10,7 +9,7 @@ from torchvision import transforms
 from torchvision.models.feature_extraction import create_feature_extractor
 from model import Discriminator
 
-from utils import structure_tensor, normalize, compute_invS1xS2, compute_eigenvalues, compute_distance
+from utils import batch_pairwise_distance, structure_tensor, normalize, compute_invS1xS2, compute_eigenvalues, compute_distance
 
 
 class ContentLoss(nn.Module):
@@ -90,43 +89,6 @@ class EuclidLoss(nn.Module):
         loss = self.pdist(sr_tensor, gt_tensor)
 
         return loss
-
-def batch_pairwise_distance(x, y=None, dist_norm = 'l1'):
-    '''
-    Input: x is a BxNxd matrix
-            y is an optional BxMxd matirx
-    Output: dist is a BxNxM matrix where dist[b,i,j] is the square norm between x[b,i,:] and y[b,j,:]
-            if y is not given then use 'y=x'.
-    i.e. dist[b,i,j] = ||x[b,i,:]-y[b,j,:]||^2
-    '''
-    B, N, d = x.size()
-    if dist_norm == 'l1':
-        x_norm = x.view(B, N, 1, d)
-        if y is not None:
-            y_norm = y.view(B, 1, -1, d)
-        else:
-            y_norm = x.view(B, 1, -1, d)
-        dist = torch.abs(x_norm - y_norm).sum(dim=3)
-    elif dist_norm == 'l2':
-        x_norm = (x ** 2).sum(dim=2).view(B, N, 1)
-        if y is not None:
-            M = y.size(1)
-            y_t = torch.transpose(y, 1, 2)
-            y_norm = (y ** 2).sum(dim=2).view(B, 1, M)
-        else:
-            y_t = torch.transpose(x, 1, 2)
-            y_norm = x_norm.view(B, 1, N)
-
-        dist = x_norm + y_norm - 2.0 * torch.bmm(x, y_t)
-        # Ensure diagonal is zero if x=y
-        if y is None:
-            dist = dist - torch.diag_embed(torch.diagonal(dist, dim1=-2, dim2=-1), dim1=-2, dim2=-1)
-        dist = torch.clamp(dist, 0.0, np.inf)
-        # dist = torch.sqrt(torch.clamp(dist, 0.0, np.inf) / d)
-    else:
-        raise NotImplementedError('%s norm has not been supported.' % dist_norm)
-
-    return dist
 
 
 class BestBuddyLoss(nn.Module):
