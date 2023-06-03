@@ -10,6 +10,9 @@ from torchvision import transforms
 from torchvision.models.feature_extraction import create_feature_extractor
 from model import Discriminator
 
+from utils import structure_tensor, normalize, compute_invS1xS2, compute_eigenvalues, compute_distance
+
+
 class ContentLoss(nn.Module):
     """Constructs a content loss function based on the VGG19 network.
     Using high-level feature mapping layers from the latter layers will focus more on the texture content of the image.
@@ -172,8 +175,11 @@ class BestBuddyLoss(nn.Module):
 
         return loss
 
+
+
 class GramLoss(nn.Module):
     def __init__(self, alpha=1.0, beta=1.0, ksize=3, dist_norm='l2', criterion='l1'):
+        """ Note: image size must be devisable by ksize """
         super(GramLoss, self).__init__()
         self.alpha = alpha
         self.beta = beta
@@ -182,27 +188,27 @@ class GramLoss(nn.Module):
 
         if criterion == 'l1':
             self.criterion = torch.nn.L1Loss(reduction='mean')
-        elif criterion == 'l2':
-            self.criterion = torch.nn.L2loss(reduction='mean')
+        elif criterion == 'l2' or criterion == 'mse':
+            self.criterion = torch.nn.MSELoss(reduction='mean')
         else:
             raise NotImplementedError('%s criterion has not been supported.' % criterion)
 
     def gram_matrix(self, input):
-        b, c, d = input.size() # 3,3,3
+        b, c, d = input.size()
         features = input.view(b, c * d)
         G = torch.mm(features, features.t())
         return G.div(b * c * d)
 
-    def do_work(self, x):
+    def compute_patches(self, x):
         """
         A lot of careful gymnastics to unfold the batch of images into nice patches and take the 
         gram matrix of every one.
         Doesnt support padding or stride. too hard to do tbh
         """
         B,_,_,_ = x.shape
-        x = x.unfold(1, self.ksize, self.ksize).unfold(2, self.ksize, self.ksize).unfold(3, self.ksize, self.ksize)     #-> torch.Size([16, 1, 64, 64, 3, 3, 3])
+        x = x.unfold(1, 3, self.ksize).unfold(2, self.ksize, self.ksize).unfold(3, self.ksize, self.ksize)     #-> torch.Size([16, 1, 64, 64, 3, 3, 3])
         x = x.squeeze()                                             #-> torch.Size([16, 64, 64, 3, 3, 3])
-        x = x.reshape(B, -1, self.ksize, self.ksize, self.ksize)    #-> torch.Size([16, 4096, 3, 3, 3])
+        x = x.reshape(B, -1, 3, self.ksize, self.ksize)    #-> torch.Size([16, 4096, 3, 3, 3])
 
         batched_gram = torch.func.vmap(torch.func.vmap(self.gram_matrix))
 
@@ -211,32 +217,23 @@ class GramLoss(nn.Module):
         return x
 
     def forward(self, x, gt):
-        # p1 = F.unfold(x, kernel_size=self.ksize, padding=self.pad, stride=self.stride) # ([16, 27, 4096])
-        # B, C, H = p1.size()
-        # p1 = p1.permute(0, 2, 1).contiguous() # ([16, 4096, 27])
-        p1 = self.do_work(x)
-        _, C, _ = p1.size()
+        p1 = self.compute_patches(x)
+        _, _, W = p1.size()
 
-        # p2 = F.unfold(gt, kernel_size=self.ksize, padding=self.pad, stride=self.stride)
-        # p2 = p2.permute(0, 2, 1).contiguous() # [B, H, C]
-        p2 = self.do_work(gt)
+        p2 = self.compute_patches(gt)
 
         gt_2 = F.interpolate(gt, scale_factor=0.5, mode='bicubic', align_corners = False)
-        # p2_2 = F.unfold(gt_2, kernel_size=self.ksize, padding=self.pad, stride=self.stride)
-        # p2_2 = p2_2.permute(0, 2, 1).contiguous() # [B, H, C]
-        p2_2 = self.do_work(gt_2)
+        p2_2 = self.compute_patches(gt_2)
 
         gt_4 = F.interpolate(gt, scale_factor=0.25, mode='bicubic', align_corners = False)
-        # p2_4 = F.unfold(gt_4, kernel_size=self.ksize, padding=self.pad, stride=self.stride)
-        # p2_4 = p2_4.permute(0, 2, 1).contiguous() # [B, H, C]
-        p2_4 = self.do_work(gt_4)
+        p2_4 = self.compute_patches(gt_4)
         p2_cat = torch.cat([p2, p2_2, p2_4], 1)
 
         score1 = self.alpha * batch_pairwise_distance(p1, p2_cat, self.dist_norm)
         score = score1 + self.beta * batch_pairwise_distance(p2, p2_cat, self.dist_norm) # [B, H, H]
 
-        weight, ind = torch.min(score, dim=2) # [B, H]
-        index = ind.unsqueeze(-1).expand([-1, -1, C]) # [B, H, C]
+        _, ind = torch.min(score, dim=2) # [B, H]
+        index = ind.unsqueeze(-1).expand([-1, -1, W]) # [B, H, C]
         sel_p2 = torch.gather(p2_cat, dim=1, index=index) # [B, H, C]
 
         loss = self.criterion(p1, sel_p2)
@@ -289,19 +286,92 @@ class DiscriminatorFeaturesLoss(nn.Module):
         self.activations = defaultdict(list)
         return loss
 
-"""
-from config import Config
-from model import Discriminator
-from loss import DiscriminatorFeaturesLoss
-import torch 
 
-c = Config()
-d = Discriminator(c)
-l = DiscriminatorFeaturesLoss(d)
 
-r = torch.randn([1,3,92,92])
-d(r)
-d(r*0.5)
-l(1,2)
+class PatchwiseStructureTensorLoss(nn.Module):
+    def __init__(self, sigma=1, rho=10, alpha=1.0, beta=1.0, ksize=3, dist_norm='l2', criterion='l1'):
+        super(PatchwiseStructureTensorLoss, self).__init__()
+        self.alpha = alpha
+        self.beta = beta
+        self.ksize = ksize
+        self.dist_norm = dist_norm
+        self.sigma = sigma
+        self.rho = rho
 
-"""
+        if criterion == 'l1':
+            self.criterion = torch.nn.L1Loss(reduction='mean')
+        elif criterion == 'l2' or criterion == 'mse':
+            self.criterion = torch.nn.MSELoss(reduction='mean')
+        else:
+            raise NotImplementedError('%s criterion has not been supported.' % criterion)
+
+    def s_norm(self, x):
+        """ Compute the structure tensor of a matrix"""
+        x = transforms.Grayscale()(x)
+        x = structure_tensor(x, sigma=self.sigma, rho=self.rho)
+        return normalize(x)
+
+    def compute_patches(self, x):
+        """
+        A lot of careful gymnastics to unfold the batch of images into nice patches and take the 
+        gram matrix of every one.
+        Doesnt support padding or stride. too hard to do tbh
+        """
+        B,_,_,_ = x.shape
+        x = x.unfold(1, 3, self.ksize).unfold(2, self.ksize, self.ksize).unfold(3, self.ksize, self.ksize)     #-> torch.Size([16, 1, 64, 64, 3, 3, 3])
+        x = x.squeeze()                                             #-> torch.Size([16, 64, 64, 3, 3, 3])
+        x = x.reshape(B, -1, 3, self.ksize, self.ksize)    #-> torch.Size([16, 4096, 3, 3, 3])
+
+        batched_gram = torch.func.vmap(torch.func.vmap(self.s_norm))
+        x = batched_gram(x)                                 #-> torch.Size([16, 4096, 3, 3])
+        x = x.reshape(B, -1, 3 * self.ksize * self.ksize)       #-> torch.Size([16, 4096, 9])
+        return x
+
+    def forward(self, x, gt):
+        p1 = self.compute_patches(x)
+        _, _, W = p1.size()
+
+        p2 = self.compute_patches(gt)
+
+        gt_2 = F.interpolate(gt, scale_factor=0.5, mode='bicubic', align_corners = False)
+        p2_2 = self.compute_patches(gt_2)
+
+        gt_4 = F.interpolate(gt, scale_factor=0.25, mode='bicubic', align_corners = False)
+        p2_4 = self.compute_patches(gt_4)
+        
+        p2_cat = torch.cat([p2, p2_2, p2_4], 1)
+
+        score1 = self.alpha * batch_pairwise_distance(p1, p2_cat, self.dist_norm)
+        score = score1 + self.beta * batch_pairwise_distance(p2, p2_cat, self.dist_norm) # [B, H, H]
+
+        _, ind = torch.min(score, dim=2) # [B, H]
+        index = ind.unsqueeze(-1).expand([-1, -1, W]) # [B, H, C]
+        sel_p2 = torch.gather(p2_cat, dim=1, index=index) # [B, H, C]
+
+        loss = self.criterion(p1, sel_p2)
+
+        return loss
+
+
+class StructureTensorLoss(nn.Module):
+    def __init__(self, sigma=1, rho=10):
+        super(StructureTensorLoss, self).__init__()
+        self.sigma = sigma
+        self.rho = rho
+    
+    
+    def st_loss(self, x, gt, normalize = True):
+        x = transforms.Grayscale()(x)
+        gt = transforms.Grayscale()(gt)
+
+        s_x = structure_tensor(x, sigma=self.sigma, rho=self.rho)
+        s_gt = structure_tensor(gt, sigma=self.sigma, rho=self.rho)
+
+        M = compute_invS1xS2(s_x, s_gt, normalize)
+        L = compute_eigenvalues(M)
+        d = compute_distance(L)
+        return d.mean()
+
+    def forward(self, x, gt):
+        batched_st_loss = torch.vmap(self.st_loss)
+        return batched_st_loss(x, gt).mean()

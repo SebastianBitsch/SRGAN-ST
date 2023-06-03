@@ -1,16 +1,14 @@
 import cv2
 import os
-import math
 
 import numpy as np
-from torchvision.utils import make_grid, save_image
 import torch
 
 from config import Config
 from torch.utils.data import DataLoader
 from dataset import TestImageDataset
 from model import Generator
-from utils import bgr2ycbcr, tensor2img, psnr, ssim
+from utils import bgr2ycbcr, tensor2img, PSNR, SSIM
 
 def test(config: Config, save_images: bool = True, g_path: str = None):
     """
@@ -66,8 +64,8 @@ def _validate(generator: Generator, val_loader: DataLoader, config: Config, save
 
             output = bgr2ycbcr(output, only_y=True)
             gt = bgr2ycbcr(gt, only_y=True)
-            psnr = psnr(output * 255, gt * 255)
-            ssim = ssim(output * 255, gt * 255)
+            psnr = PSNR(output * 255, gt * 255)
+            ssim = SSIM(output * 255, gt * 255)
             psnr_l.append(psnr)
             ssim_l.append(ssim)
 
@@ -79,7 +77,7 @@ def _validate(generator: Generator, val_loader: DataLoader, config: Config, save
 
 if __name__ == "__main__":
     config = Config()
-    config.EXP.NAME = "stock-srgan"
+    config.EXP.NAME = "stock-srgan-w-pixel"
     # gpath = ""
 
     test(config = config, save_images = True)
