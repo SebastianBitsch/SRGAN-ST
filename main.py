@@ -30,9 +30,10 @@ def warmup_experiment(config: Config, index:int) -> Config:
 
 def srgan_bbgan(config: Config, index:int) -> Config:
     """ stock srgan vs bbgan"""
-    config.EXP.NAME = ['stock-srgan-w-pixel', 'stock-bbgan-w-pixel'][index]
+    config.EXP.NAME = ['stock-srgan-fixed-adv', 'stock-bbgan-lorna-fixed-adv'][index]
     config.MODEL.CONTINUE_FROM_WARMUP = True
     config.MODEL.WARMUP_WEIGHTS = "results/resnet20/g_best.pth"
+    # config.MODEL.WARMUP_WEIGHTS = "results/SRResNet-lorna-pretrained.pth.tar"
     if index == 1:
         config.add_g_criterion("BestBuddy", BestBuddyLoss(), 1.0)
     return config
@@ -56,18 +57,14 @@ if __name__ == "__main__":
 
     # Get job-index from bash, if the job is not an array it will be zero
     job_index = get_jobindex()
+    print(f"Running job: {job_index}")
 
     # Edit config based on 
     config = Config()
-
-
-    print(f"Running job: {job_index}")
-
-
-    config = test_st_losses(config)
+    config = srgan_bbgan(config, job_index)
+    
     train(config = config)
 
-    # Done mostly just to get some images saved to file
     test(config = config, save_images = True)
 
     print(f"Finished job: {job_index}")

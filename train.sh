@@ -6,8 +6,8 @@
 ### -- Specify the output and error file. %J is the job-id --
 ### -- -o and -e mean append, -oo and -eo mean overwrite --
 
-#BSUB -o logs/srganbbgan_w_pixel_%J.out
-#BSUB -e logs/srganbbgan_w_pixel_%J.err
+#BSUB -o logs/srganbbgan_%J.out
+#BSUB -e logs/srganbbgan_%J.err
 # -- end of LSF options --
 
 ### -- specify queue -- 

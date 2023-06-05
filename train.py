@@ -29,8 +29,14 @@ def train(config: Config = None):
 
     # Should model weights be loaded from warmup?
     if config.MODEL.CONTINUE_FROM_WARMUP:
-        generator.load_state_dict(torch.load(config.MODEL.WARMUP_WEIGHTS))
-        
+        weights = torch.load(config.MODEL.WARMUP_WEIGHTS)
+        if "state_dict" in weights:
+            weights = weights['state_dict']
+        generator.load_state_dict(weights)
+
+    # w = torch.load("results/Discriminator-lorna-pretrained.pth.tar")    
+    # discriminator.load_state_dict(w['state_dict'])
+
     # Define losses
     adversarial_criterion = torch.nn.BCEWithLogitsLoss()
 
@@ -51,16 +57,6 @@ def train(config: Config = None):
     )
 
     # Schedulers
-    d_scheduler = lr_scheduler.StepLR(
-        optimizer = d_optimizer,
-        step_size = config.SCHEDULER.STEP_SIZE,
-        gamma = config.SCHEDULER.GAMMA
-    )
-    g_scheduler = lr_scheduler.StepLR(
-        optimizer = g_optimizer,
-        step_size = config.SCHEDULER.STEP_SIZE,
-        gamma = config.SCHEDULER.GAMMA
-    )
     d_scheduler = lr_scheduler.MultiStepLR(
         optimizer = d_optimizer,
         milestones = [ 10 ],
@@ -130,24 +126,14 @@ def train(config: Config = None):
             
             generator.zero_grad()
 
-            sr = generator(lr)
-
-            # pred_gt = discriminator(gt)
-            # pred_sr = discriminator(sr).detach()
-
-            # adversarial_loss = 0.005 * adversarial_criterion(pred_sr - pred_gt.mean(0, keepdim=True), real_label)# * config.MODEL.G_LOSS.CRITERION_WEIGHTS['Adversarial']
-            # content_loss = 1.0 * content_criterion(gt, sr)
-
-            # g_loss = content_loss + pixel_loss + adversarial_loss # TODO: Add weighting
-
-
             # Calculate Generator loss
             g_loss = torch.tensor(0.0, device=config.DEVICE)
+            sr = generator(lr)
+
             for name, criterion in config.MODEL.G_LOSS.CRITERIONS.items():
                 weight = config.MODEL.G_LOSS.CRITERION_WEIGHTS[name]
 
                 if name == 'Adversarial':
-                    # lornatang
                     pred_sr = discriminator(sr)
                     loss = criterion(pred_sr, real_label)
                 else:
@@ -169,17 +155,21 @@ def train(config: Config = None):
             
             discriminator.zero_grad()
 
-            # Works            
-            # Calculate the classification score of the discriminator model for real samples
+            sr = generator(lr)
             pred_gt = discriminator(gt)
-            pred_sr = discriminator(sr.detach())
-
-            loss_real = 0.5 * adversarial_criterion(pred_gt - pred_sr.mean(0, keepdim=True), real_label)
-            loss_fake = 0.5 * adversarial_criterion(pred_sr - pred_gt.mean(0, keepdim=True), fake_label)
+            pred_sr = discriminator(sr)
+            
+            loss_real = 0.5 * adversarial_criterion(pred_gt, real_label)
+            loss_fake = 0.5 * adversarial_criterion(pred_sr, fake_label)
             d_loss = loss_real + loss_fake
+
             d_loss.backward()
 
             d_optimizer.step()
+
+            # Update learning rates
+            g_scheduler.step()
+            d_scheduler.step()
 
             # -------------
             #  Log Progress
@@ -192,8 +182,8 @@ def train(config: Config = None):
             writer.add_scalar("Train/G_Loss", g_loss.item(), batches_done)
             for name, loss in loss_values.items():
                 writer.add_scalar(f"Train/G_{name}", loss, batches_done)
-            writer.add_scalar("Train/D(GT)_Probability", torch.sigmoid_(torch.mean(pred_gt.detach())).item(), batches_done)
-            writer.add_scalar("Train/D(SR)_Probability", torch.sigmoid_(torch.mean(pred_sr.detach())).item(), batches_done)
+            writer.add_scalar("Train/D(GT)_Probability", torch.sigmoid(torch.mean(pred_gt.detach())).item(), batches_done)
+            writer.add_scalar("Train/D(SR)_Probability", torch.sigmoid(torch.mean(pred_sr.detach())).item(), batches_done)
 
             # Print to terminal / log
             print(f"[Epoch {epoch+1}/{config.EXP.N_EPOCHS}] [Batch {batch_num}/{len(train_dataloader)}] [D loss: {d_loss.item()}] [G loss: {g_loss.item()}] [G losses: {loss_values}]")
@@ -214,10 +204,6 @@ def train(config: Config = None):
         writer.add_scalar(f"Test/PSNR", psnr, epoch + 1)
         writer.add_scalar(f"Test/SSIM", ssim, epoch + 1)
         
-
-        # Update learning rate
-        g_scheduler.step()
-        d_scheduler.step()
 
         # ----------------
         #  Save best model
