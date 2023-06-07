@@ -45,8 +45,8 @@ class TestImageDataset(Dataset):
     def __init__(self, test_gt_images_dir: str, test_lr_images_dir: str) -> None:
         super(TestImageDataset, self).__init__()
         # Get all image file names in folder
-        self.gt_image_file_names = [os.path.join(test_gt_images_dir, x) for x in absoluteFilePaths(test_gt_images_dir) if not x.startswith('.')]
-        self.lr_image_file_names = [os.path.join(test_lr_images_dir, x) for x in absoluteFilePaths(test_lr_images_dir) if not x.startswith('.')]
+        self.gt_image_file_names = sorted([os.path.join(test_gt_images_dir, x) for x in absoluteFilePaths(test_gt_images_dir) if not x.startswith('.')])
+        self.lr_image_file_names = sorted([os.path.join(test_lr_images_dir, x) for x in absoluteFilePaths(test_lr_images_dir) if not x.startswith('.')])
 
     def __getitem__(self, batch_index: int) -> tuple[Tensor, Tensor]:
         gt_tensor = read_image(self.gt_image_file_names[batch_index]).float() / 255.0
