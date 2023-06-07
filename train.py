@@ -19,26 +19,41 @@ def train(config: Config = None):
     init_random_seed(config.DATA.SEED)
 
     # House keeping variables
-    batches_done = 0
     best_psnr = best_ssim = 0.0
     loss_values = dict()
 
+    # Dataloaders
+    # Load train, test and valid datasets
+    train_datasets = TrainImageDataset(config.DATA.TRAIN_GT_IMAGES_DIR, config.DATA.UPSCALE_FACTOR)
+    test_datasets = TestImageDataset(config.DATA.TEST_GT_IMAGES_DIR, config.DATA.TEST_LR_IMAGES_DIR)
+
+    # Generator all dataloader
+    train_dataloader = DataLoader(
+        dataset = train_datasets,
+        batch_size = config.DATA.BATCH_SIZE,
+        shuffle = True,
+        num_workers = 1,
+        pin_memory = True,
+        drop_last = True,
+        persistent_workers = True,
+    )
+    test_dataloader = DataLoader(
+        dataset = test_datasets,
+        batch_size = 1,
+        shuffle = False,
+        num_workers = 1,
+        pin_memory = True,
+        drop_last = False,
+        persistent_workers = True,
+    )
+    
     # Define models
     discriminator = Discriminator(config).to(config.DEVICE)
     generator = Generator(config).to(config.DEVICE)
 
-    # Should model weights be loaded from warmup?
-    if config.MODEL.CONTINUE_FROM_WARMUP:
-        weights = torch.load(config.MODEL.WARMUP_WEIGHTS)
-        if "state_dict" in weights:
-            weights = weights['state_dict']
-        generator.load_state_dict(weights)
-
-    # w = torch.load("results/Discriminator-lorna-pretrained.pth.tar")    
-    # discriminator.load_state_dict(w['state_dict'])
 
     # Define losses
-    adversarial_criterion = torch.nn.BCEWithLogitsLoss()
+    adversarial_criterion = torch.nn.BCEWithLogitsLoss().to(config.DEVICE)
 
     # Optimizers
     d_optimizer = torch.optim.Adam(
@@ -68,30 +83,13 @@ def train(config: Config = None):
         gamma = config.SCHEDULER.GAMMA
     )
 
-    # Dataloaders
-    # Load train, test and valid datasets
-    train_datasets = TrainImageDataset(config.DATA.TRAIN_GT_IMAGES_DIR, config.DATA.UPSCALE_FACTOR)
-    test_datasets = TestImageDataset(config.DATA.TEST_GT_IMAGES_DIR, config.DATA.TEST_LR_IMAGES_DIR)
+    # Should model weights be loaded from warmup?
+    if config.MODEL.CONTINUE_FROM_WARMUP:
+        weights = torch.load(config.MODEL.WARMUP_WEIGHTS)
+        if "state_dict" in weights:
+            weights = weights['state_dict']
+        generator.load_state_dict(weights, strict=False)
 
-    # Generator all dataloader
-    train_dataloader = DataLoader(
-        dataset = train_datasets,
-        batch_size = config.DATA.BATCH_SIZE,
-        shuffle = True,
-        num_workers = 1,
-        pin_memory = True,
-        drop_last = True,
-        persistent_workers = True,
-    )
-    test_dataloader = DataLoader(
-        dataset = test_datasets,
-        batch_size = 1,
-        shuffle = False,
-        num_workers = 1,
-        pin_memory = True,
-        drop_last = False,
-        persistent_workers = True,
-    )
 
     # Init Tensorboard writer to store train and test info
     # also save the config used in this run to Tensorboard
@@ -104,19 +102,18 @@ def train(config: Config = None):
         # ----------------
         #  Train
         # ----------------
-        discriminator.train()
         generator.train()
+        discriminator.train()
+
+        # Set the real sample label to 1, and the false sample label to 0
+        real_label = torch.full([config.DATA.BATCH_SIZE, 1], 1.0 - config.EXP.LABEL_SMOOTHING, dtype=torch.float, device=config.DEVICE)
+        fake_label = torch.full([config.DATA.BATCH_SIZE, 1], 0.0, dtype=torch.float, device=config.DEVICE)
 
         for batch_num, (gt, lr) in enumerate(train_dataloader):
-            batches_done += 1
 
             # Transfer in-memory data to CUDA devices to speed up training
             gt = gt.to(device=config.DEVICE, non_blocking=True)
             lr = lr.to(device=config.DEVICE, non_blocking=True)
-
-            # Set the real sample label to 1, and the false sample label to 0
-            real_label = torch.full([config.DATA.BATCH_SIZE, 1], 1.0 - config.EXP.LABEL_SMOOTHING, dtype=gt.dtype, device=config.DEVICE)
-            fake_label = torch.full([config.DATA.BATCH_SIZE, 1], 0.0, dtype=gt.dtype, device=config.DEVICE)
 
             # ----------------
             #  Update Generator
@@ -126,23 +123,18 @@ def train(config: Config = None):
             
             generator.zero_grad()
 
-            # Calculate Generator loss
-            g_loss = torch.tensor(0.0, device=config.DEVICE)
             sr = generator(lr)
-
+            g_loss = torch.tensor(0.0, device=config.DEVICE)
             for name, criterion in config.MODEL.G_LOSS.CRITERIONS.items():
                 weight = config.MODEL.G_LOSS.CRITERION_WEIGHTS[name]
 
                 if name == 'Adversarial':
-                    pred_sr = discriminator(sr)
-                    loss = criterion(pred_sr, real_label)
+                    loss = criterion(discriminator(sr), real_label)
                 else:
                     loss = criterion(sr, gt)
                 
-                loss *= weight
-                g_loss += loss
+                g_loss = g_loss + (loss * weight)
                 loss_values[name] = loss.item() # Used for logging to Tensorboard
-
 
             g_loss.backward()
             g_optimizer.step()
@@ -155,21 +147,16 @@ def train(config: Config = None):
             
             discriminator.zero_grad()
 
-            sr = generator(lr)
             pred_gt = discriminator(gt)
-            pred_sr = discriminator(sr)
-            
-            loss_real = 0.5 * adversarial_criterion(pred_gt, real_label)
-            loss_fake = 0.5 * adversarial_criterion(pred_sr, fake_label)
+            loss_real = adversarial_criterion(pred_gt, real_label)
+
+            pred_sr = discriminator(sr.detach().clone())
+            loss_fake = adversarial_criterion(pred_sr, fake_label)
+
             d_loss = loss_real + loss_fake
 
             d_loss.backward()
-
-            d_optimizer.step()
-
-            # Update learning rates
-            g_scheduler.step()
-            d_scheduler.step()
+            g_optimizer.step()
 
             # -------------
             #  Log Progress
@@ -178,16 +165,20 @@ def train(config: Config = None):
                 continue
             
             # Log to TensorBoard
+            batches_done = batch_num + epoch * len(train_dataloader)
             writer.add_scalar("Train/D_Loss", d_loss.item(), batches_done)
             writer.add_scalar("Train/G_Loss", g_loss.item(), batches_done)
             for name, loss in loss_values.items():
                 writer.add_scalar(f"Train/G_{name}", loss, batches_done)
-            writer.add_scalar("Train/D(GT)_Probability", torch.sigmoid(torch.mean(pred_gt.detach())).item(), batches_done)
-            writer.add_scalar("Train/D(SR)_Probability", torch.sigmoid(torch.mean(pred_sr.detach())).item(), batches_done)
+            writer.add_scalar("Train/D(GT)_Probability", torch.sigmoid_(torch.mean(pred_gt.detach())).item(), batches_done)
+            writer.add_scalar("Train/D(SR)_Probability", torch.sigmoid_(torch.mean(pred_sr.detach())).item(), batches_done)
 
             # Print to terminal / log
             print(f"[Epoch {epoch+1}/{config.EXP.N_EPOCHS}] [Batch {batch_num}/{len(train_dataloader)}] [D loss: {d_loss.item()}] [G loss: {g_loss.item()}] [G losses: {loss_values}]")
 
+        # Update learning rates
+        g_scheduler.step()
+        d_scheduler.step()
 
         # ----------------
         #  Validate
@@ -197,8 +188,8 @@ def train(config: Config = None):
         psnr, ssim = _validate(generator, test_dataloader, config)
 
         # Print training log information
-        if batch_num % config.LOG_VALIDATION_PERIOD == 0:
-            print(f"[Test: {batch_num+1}/{len(train_dataloader)}] [PSNR: {psnr}] [SSIM: {ssim}]")
+        if epoch % config.LOG_VALIDATION_PERIOD == 0:
+            print(f"[Test: {epoch}/{config.EXP.N_EPOCHS}] [PSNR: {psnr}] [SSIM: {ssim}]")
 
         # Write avg PSNR and SSIM to Tensorflow and logs
         writer.add_scalar(f"Test/PSNR", psnr, epoch + 1)
