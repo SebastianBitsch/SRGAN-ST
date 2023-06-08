@@ -59,7 +59,7 @@ def warmup(config: Config = None):
 
     # Init Tensorboard writer to store train and test info
     # also save the config used in this run to Tensorboard
-    writer = SummaryWriter(f"samples/logs/{config.EXP.NAME}")
+    writer = SummaryWriter(f"tensorboard/{config.EXP.NAME}")
     writer.add_text("Config/Params", config.get_all_params())
 
     for epoch in range(config.EXP.START_EPOCH, config.EXP.N_EPOCHS):

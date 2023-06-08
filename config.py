@@ -1,4 +1,4 @@
-from torch import nn
+from torch import nn, cuda
 
 from loss import ContentLoss
 
@@ -16,13 +16,13 @@ class dotdict(dict):
 
 class Config():
 
-    DEVICE = "cuda:0"               # Device, should only really be cuda tbh
+    DEVICE = "cuda:0" if cuda.is_available() else "cpu"               # Device, should only really be cuda tbh
 
     EXP = dotdict()
     EXP.USER = "s204163"            # The user id on HPC the scratch directory in on
     EXP.NAME = "experiment-name"    # Name of the experiment, folders etc. will be named by this
     EXP.START_EPOCH = 0             # Whether to resume training at some epoch number or start at epoch 0
-    EXP.N_EPOCHS = 20               # Number of epochs to train for
+    EXP.N_EPOCHS = 40               # Number of epochs to train for
     EXP.LABEL_SMOOTHING = 0.0       # One-sided label smoothing. The true label will be 1.0 - label_smoothing
 
     # Logging options
@@ -43,9 +43,11 @@ class Config():
     
     # Model
     MODEL = dotdict()
-    MODEL.CONTINUE_FROM_WARMUP = False                          # Should the generator continue from some pretrained weights?
-    MODEL.WARMUP_WEIGHTS = "results/Resnet-first/g_best.pth"    # Directory of weights to use if we continue from warmup
-    
+    MODEL.G_CONTINUE_FROM_WARMUP = False                          # Should the generator continue from some pretrained weights?
+    MODEL.G_WARMUP_WEIGHTS = "results/Resnet-first/g_best.pth"    # Directory of weights to use if we continue from warmup
+    MODEL.D_CONTINUE_FROM_WARMUP = False                          # Should the generator continue from some pretrained weights?
+    MODEL.D_WARMUP_WEIGHTS = ""    # Directory of weights to use if we continue from warmup
+
     # Generator network parameters
     MODEL.G_IN_CHANNEL = 3          # In color channels
     MODEL.G_OUT_CHANNEL = 3         # Out color channels
@@ -53,7 +55,8 @@ class Config():
     MODEL.G_N_RCB = 16
     MODEL.G_LOSS = dotdict()
 
-    # The layers and weights from VGG19 that are used in the ContentLoss() 
+    # The layers and weights from VGG19 that are used in the ContentLoss()
+    # These are the layers and weights used by GramGAN in their paper
     MODEL.G_LOSS.VGG19_LAYERS = {
         "features.17" : 1/8,
         "features.26" : 1/4,
@@ -89,6 +92,7 @@ class Config():
     # Solver
     SOLVER = dotdict()
     # Discriminator
+    SOLVER.D_UPDATE_INTERVAL = 1
     SOLVER.D_OPTIMIZER = 'Adam'
     SOLVER.D_BASE_LR = 1e-4
     SOLVER.D_BETA1 = 0.9

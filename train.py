@@ -50,7 +50,9 @@ def train(config: Config = None):
     # Define models
     discriminator = Discriminator(config).to(config.DEVICE)
     generator = Generator(config).to(config.DEVICE)
-
+    
+    if "Content1" in config.MODEL.G_LOSS.CRITERIONS: #TODO: nicer
+        config.MODEL.G_LOSS.CRITERIONS['Content1'].register_descriminator(discriminator)
 
     # Define losses
     adversarial_criterion = torch.nn.BCEWithLogitsLoss().to(config.DEVICE)
@@ -84,16 +86,17 @@ def train(config: Config = None):
     )
 
     # Should model weights be loaded from warmup?
-    if config.MODEL.CONTINUE_FROM_WARMUP:
-        weights = torch.load(config.MODEL.WARMUP_WEIGHTS)
-        if "state_dict" in weights:
-            weights = weights['state_dict']
+    if config.MODEL.G_CONTINUE_FROM_WARMUP:
+        weights = torch.load(config.MODEL.G_WARMUP_WEIGHTS)
         generator.load_state_dict(weights, strict=False)
 
+    if config.MODEL.D_CONTINUE_FROM_WARMUP:
+        weights = torch.load(config.MODEL.D_WARMUP_WEIGHTS)
+        discriminator.load_state_dict(weights, strict=False)
 
     # Init Tensorboard writer to store train and test info
     # also save the config used in this run to Tensorboard
-    writer = SummaryWriter(f"samples/logs/{config.EXP.NAME}")
+    writer = SummaryWriter(f"tensorboard/{config.EXP.NAME}")
     writer.add_text("Config/Params", config.get_all_params())
 
     for epoch in range(config.EXP.START_EPOCH, config.EXP.N_EPOCHS):
@@ -131,10 +134,13 @@ def train(config: Config = None):
                 if name == 'Adversarial':
                     loss = criterion(discriminator(sr), real_label)
                 else:
+                    if name == "Content1":
+                        _ = discriminator(sr.detach())
+                        _ = discriminator(gt.detach())
                     loss = criterion(sr, gt)
                 
                 g_loss = g_loss + (loss * weight)
-                loss_values[name] = loss.item() # Used for logging to Tensorboard
+                loss_values[name] = (loss * weight).item() # Used for logging to Tensorboard
 
             g_loss.backward()
             g_optimizer.step()
@@ -142,21 +148,22 @@ def train(config: Config = None):
             # --------------------
             #  Update Discriminator
             # --------------------
-            for p in discriminator.parameters():
-                p.requires_grad = True
-            
-            discriminator.zero_grad()
+            if batch_num % config.SOLVER.D_UPDATE_INTERVAL == 0:
+                for p in discriminator.parameters():
+                    p.requires_grad = True
+                
+                discriminator.zero_grad()
 
-            pred_gt = discriminator(gt)
-            loss_real = adversarial_criterion(pred_gt, real_label)
+                pred_gt = discriminator(gt)
+                loss_real = adversarial_criterion(pred_gt, real_label)
 
-            pred_sr = discriminator(sr.detach().clone())
-            loss_fake = adversarial_criterion(pred_sr, fake_label)
+                pred_sr = discriminator(sr.detach().clone())
+                loss_fake = adversarial_criterion(pred_sr, fake_label)
 
-            d_loss = loss_real + loss_fake
+                d_loss = loss_real + loss_fake
 
-            d_loss.backward()
-            g_optimizer.step()
+                d_loss.backward()
+                d_optimizer.step()
 
             # -------------
             #  Log Progress
@@ -189,7 +196,7 @@ def train(config: Config = None):
 
         # Print training log information
         if epoch % config.LOG_VALIDATION_PERIOD == 0:
-            print(f"[Test: {epoch}/{config.EXP.N_EPOCHS}] [PSNR: {psnr}] [SSIM: {ssim}]")
+            print(f"[Test: {epoch+1}/{config.EXP.N_EPOCHS}] [PSNR: {psnr}] [SSIM: {ssim}]")
 
         # Write avg PSNR and SSIM to Tensorflow and logs
         writer.add_scalar(f"Test/PSNR", psnr, epoch + 1)
