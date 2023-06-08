@@ -11,7 +11,6 @@ from model import Discriminator
 
 from utils import batch_pairwise_distance, structure_tensor, normalize, compute_invS1xS2, compute_eigenvalues, compute_distance
 
-
 class ContentLoss(nn.Module):
     """Constructs a content loss function based on the VGG19 network.
     Using high-level feature mapping layers from the latter layers will focus more on the texture content of the image.
@@ -20,9 +19,11 @@ class ContentLoss(nn.Module):
         -`Photo-Realistic Single Image Super-Resolution Using a Generative Adversarial Network <https://arxiv.org/pdf/1609.04802.pdf>` paper.
         -`ESRGAN: Enhanced Super-Resolution Generative Adversarial Networks                    <https://arxiv.org/pdf/1809.00219.pdf>` paper.
         -`Perceptual Extreme Super Resolution Network with Receptive Field Block               <https://arxiv.org/pdf/2005.12597.pdf>` paper.
+
+        See: https://www.researchgate.net/figure/llustration-of-the-network-architecture-of-VGG-19-model-conv-means-convolution-FC-means_fig2_325137356
      """
 
-    def __init__(self, extraction_layers: dict[str, float], device) -> None:
+    def __init__(self, extraction_layers: dict[str, float], device:str, criterion:str = "mse") -> None:
         """
         Content loss (in SRGAN) / Perceptual loss (in GramGAN).
         Follows the method outlined in GramGAN paper for computing a loss from the activation layer 
@@ -33,15 +34,22 @@ class ContentLoss(nn.Module):
         """
         super(ContentLoss, self).__init__()
 
+        if criterion == 'l1':
+            self.criterion = torch.nn.L1Loss()
+        elif criterion == 'l2' or criterion == 'mse':
+            self.criterion = torch.nn.MSELoss()
+        else:
+            raise NotImplementedError('%s criterion has not been implmented.' % criterion)
+
         # Get the name of the specified feature extraction node
         self.extraction_layers = extraction_layers
         self.device = device
 
         # Load the VGG19 model trained on the ImageNet dataset.
-        model = models.vgg19(weights=models.VGG19_Weights.IMAGENET1K_V1).to(device)
+        vgg = models.vgg19(weights=models.VGG19_Weights.IMAGENET1K_V1).to(device)
 
-        # Extract the thirty-sixth layer output in the VGG19 model as the content loss.
-        self.feature_extractor = create_feature_extractor(model, list(extraction_layers))
+        # Extract the output of given layers in the VGG19 model
+        self.feature_extractor = create_feature_extractor(vgg, list(extraction_layers))
 
         # This is the VGG model preprocessing method of the ImageNet dataset.
         # The mean and std of ImageNet. See: https://stackoverflow.com/questions/58151507/why-pytorch-officially-use-mean-0-485-0-456-0-406-and-std-0-229-0-224-0-2
@@ -54,24 +62,20 @@ class ContentLoss(nn.Module):
         # Set to validation mode
         self.feature_extractor.eval()
 
-
-    def __repr__(self):
-        return "ContentLoss()"
-
     def forward(self, sr_tensor: Tensor, gt_tensor: Tensor) -> Tensor:
-        # Standardized operations
-        sr_tensor = self.normalize(sr_tensor)
-        gt_tensor = self.normalize(gt_tensor)
+        sr_features = self.feature_extractor(self.normalize(sr_tensor))
+        gt_features = self.feature_extractor(self.normalize(gt_tensor))
 
-        sr_feature = self.feature_extractor(sr_tensor)
-        gt_feature = self.feature_extractor(gt_tensor)
-
-        # Find the feature map difference between the two images
+        # Calculate difference/loss between the VGG feature representation of the two images
         loss = torch.tensor(0.0, device = self.device)
-        for name, weight in self.extraction_layers.items():
-            loss += weight * F.mse_loss(sr_feature[name], gt_feature[name])
+        for layer_name, weight in self.extraction_layers.items():
+            loss += weight * self.criterion(sr_features[layer_name], gt_features[layer_name])
         
         return loss
+    
+    def __repr__(self):
+        """ Only used to make logging to tensorboard look nicer """
+        return "ContentLoss()"
 
 
 
@@ -93,7 +97,8 @@ class EuclidLoss(nn.Module):
 
 class BestBuddyLoss(nn.Module):
     """ https://github.com/dvlab-research/Simple-SR/blob/08c71e9e46ba781df50893f0476ecd0fc004aa45/utils/loss.py#L54 """
-    def __init__(self, alpha=1.0, beta=1.0, ksize=3, pad=0, stride=3, dist_norm='l2', criterion='l1'):
+    def __init__(self, alpha:float=1.0, beta:float=1.0, ksize:int=3, pad:int=0, stride:int=3, dist_norm:str='l2', criterion:str='l1') -> None:
+        """ """
         super(BestBuddyLoss, self).__init__()
         self.alpha = alpha
         self.beta = beta
@@ -103,11 +108,11 @@ class BestBuddyLoss(nn.Module):
         self.dist_norm = dist_norm
 
         if criterion == 'l1':
-            self.criterion = torch.nn.L1Loss(reduction='mean')
-        elif criterion == 'l2':
-            self.criterion = torch.nn.L2loss(reduction='mean')
+            self.criterion = torch.nn.L1Loss()
+        elif criterion == 'l2' or criterion == 'mse':
+            self.criterion = torch.nn.MSELoss()
         else:
-            raise NotImplementedError('%s criterion has not been supported.' % criterion)
+            raise NotImplementedError('%s criterion has not been implmented.' % criterion)
 
     def forward(self, x, gt):
         p1 = F.unfold(x, kernel_size=self.ksize, padding=self.pad, stride=self.stride)
@@ -140,7 +145,8 @@ class BestBuddyLoss(nn.Module):
 
 
 class GramLoss(nn.Module):
-    def __init__(self, alpha=1.0, beta=1.0, ksize=3, dist_norm='l2', criterion='l1'):
+    """"""
+    def __init__(self, alpha:float=1.0, beta:float=1.0, ksize:int=3, dist_norm:str='l2', criterion:str='l1') -> None:
         """ Note: image size must be devisable by ksize """
         super(GramLoss, self).__init__()
         self.alpha = alpha
@@ -149,11 +155,11 @@ class GramLoss(nn.Module):
         self.dist_norm = dist_norm
 
         if criterion == 'l1':
-            self.criterion = torch.nn.L1Loss(reduction='mean')
+            self.criterion = torch.nn.L1Loss()
         elif criterion == 'l2' or criterion == 'mse':
-            self.criterion = torch.nn.MSELoss(reduction='mean')
+            self.criterion = torch.nn.MSELoss()
         else:
-            raise NotImplementedError('%s criterion has not been supported.' % criterion)
+            raise NotImplementedError('%s criterion has not been implmented.' % criterion)
 
     def gram_matrix(self, input):
         b, c, d = input.size()
@@ -206,23 +212,22 @@ class GramLoss(nn.Module):
 
 class DiscriminatorFeaturesLoss(nn.Module):
     
-    def __init__(self, discriminator: Discriminator, extraction_layers: dict[int, float], config) -> None:
+    def __init__(self, extraction_layers: dict[str, float], config) -> None:
         super(DiscriminatorFeaturesLoss, self).__init__()
-        
-        # Add hooks to all the layers which will update the self.activations value whenever forwards is called on the model
-        for layer_name, _ in extraction_layers.items():
-            layer = self.get_layer_by_name(discriminator, layer_name)
-            layer.register_forward_hook(self.get_activation(layer_name))
-
         self.device = config.DEVICE
         self.activations = defaultdict(list)
         self.extraction_layers = extraction_layers
 
+    def register_descriminator(self, discriminator: Discriminator):
+        # Add hooks to all the layers which will update the self.activations value whenever forwards is called on the model
+        for layer_name, _ in self.extraction_layers.items():
+            layer = self.get_layer_by_name(discriminator, layer_name)
+            layer.register_forward_hook(self.get_activation(layer_name))
 
-    def get_layer_by_name(self, layer, access_string):
+    def get_layer_by_name(self, model, layer_name):
         """ Get a reference to a given layer of a torch network"""
-        names = access_string.split(sep='.')
-        return reduce(getattr, names, layer)
+        names = layer_name.split(sep='.')
+        return reduce(getattr, names, model)
 
 
     def get_activation(self, name):
@@ -239,7 +244,12 @@ class DiscriminatorFeaturesLoss(nn.Module):
         the forward pass of the discriminator
         """
         loss = torch.tensor(0.0, device=self.device)
-        for layer_name, (x, gt) in self.activations.items():
+        for layer_name, vals in self.activations.items():
+            if len(vals) < 2:
+                print("Should never happen fix your code")
+                continue
+            x = vals[-2]
+            gt = vals[-1]
             weight = self.extraction_layers[layer_name]
             # loss += weight * torch.nn.L1Loss(reduction='mean')(x, gt)
             loss += weight * F.mse_loss(x, gt)
@@ -251,7 +261,7 @@ class DiscriminatorFeaturesLoss(nn.Module):
 
 
 class PatchwiseStructureTensorLoss(nn.Module):
-    def __init__(self, sigma=1, rho=10, alpha=1.0, beta=1.0, ksize=3, dist_norm='l2', criterion='l1'):
+    def __init__(self, sigma=0.5, rho=2, alpha=1.0, beta=1.0, ksize=3, dist_norm='l2', criterion='l1'):
         super(PatchwiseStructureTensorLoss, self).__init__()
         self.alpha = alpha
         self.beta = beta
@@ -316,7 +326,7 @@ class PatchwiseStructureTensorLoss(nn.Module):
 
 
 class StructureTensorLoss(nn.Module):
-    def __init__(self, sigma=1, rho=10):
+    def __init__(self, sigma=0.5, rho=2):
         super(StructureTensorLoss, self).__init__()
         self.sigma = sigma
         self.rho = rho

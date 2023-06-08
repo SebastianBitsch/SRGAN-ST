@@ -32,11 +32,8 @@ def test(config: Config, save_images: bool = True, g_path: str = None):
     # Initialize the super-resolution bsrgan_model
     generator = Generator(config).to(config.DEVICE)
     
-    # Load the weights
-    weights = torch.load(g_path)
-    if "state_dict" in weights:
-        weights = weights['state_dict']
-    generator.load_state_dict(weights)
+    # Load weights of generator
+    generator.load_state_dict(torch.load(g_path))
 
     # Test
     psnr, ssim = _validate(generator=generator, val_loader=test_dataloader, config=config, save_images=save_images)
@@ -82,7 +79,10 @@ def _validate(generator: Generator, val_loader: DataLoader, config: Config, save
 
 if __name__ == "__main__":
     config = Config()
-    config.EXP.NAME = "lornatang-resnet"
-    gpath = ""
+    config.EXP.NAME = "ablation-c1-bestbuddy"
+    config.DATA.TEST_SET = "Set5"
+    # TODO
+    config.DATA.TEST_GT_IMAGES_DIR = F"/work3/{config.EXP.USER}/data/{config.DATA.TEST_SET}/GTmod12"
+    config.DATA.TEST_LR_IMAGES_DIR = f"/work3/{config.EXP.USER}/data/{config.DATA.TEST_SET}/LRbicx4"
 
-    test(config = config, save_images = True, g_path="results/SRResNet-lorna-pretrained.pth.tar")
+    test(config = config, save_images = True)

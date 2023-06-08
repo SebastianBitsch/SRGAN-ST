@@ -21,7 +21,7 @@
     - a100sh virker i hvert fald
 
 * Launch tensorboard fra ssh i vsc:
-    - ```tensorboard --logdir=samples/logs/ --host localhost --port 3000```
+    - ```tensorboard --logdir=tensorboard/ --host localhost --port 3000```
     - ```fuser -k 3000/tcp``` slå processen ned hvis den allerede kører
 
 * Kopier filer til og fra hpc [link](https://www.gbar.dtu.dk/index.php/faq/78-home-directory)

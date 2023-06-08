@@ -8,7 +8,7 @@ __pycache__
 logs
 data/
 results
-samples
+tensorboard
 *.err
 *.out
 

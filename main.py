@@ -3,7 +3,7 @@ from config import Config
 from train import train
 from warmup_generator import warmup
 from validate import test
-from loss import BestBuddyLoss, GramLoss, PatchwiseStructureTensorLoss, StructureTensorLoss
+from loss import BestBuddyLoss, GramLoss, PatchwiseStructureTensorLoss, StructureTensorLoss, DiscriminatorFeaturesLoss
 
 
 def get_jobindex(fallback:int = 0) -> int:
@@ -56,30 +56,30 @@ def test_st_losses(config: Config) -> Config:
 
 
 def ablation_study(config: Config, index:int) -> Config:
-    config.EXP.NAME = ['ablation-plain', 'ablation-bestbuddy', 'ablation-gram', 'ablation-patchwise-st', 'ablation-st'][index]
-    config.MODEL.CONTINUE_FROM_WARMUP = True
-    config.MODEL.WARMUP_WEIGHTS = "results/resnet3/g_best.pth"
+    config.EXP.NAME = ['ablation-c-plain', 'ablation-c-bestbuddy', 'ablation-c-gram', 'ablation-c-patchwise-st', 'ablation-c-st'][index]
+    config.MODEL.G_CONTINUE_FROM_WARMUP = True
+    config.MODEL.G_WARMUP_WEIGHTS = "results/SRResNet-lorna-pretrained.pth"#"results/SRRESNET/g_best.pth.tar"
+    config.MODEL.D_CONTINUE_FROM_WARMUP = True
+    config.MODEL.D_WARMUP_WEIGHTS = "results/discriminator-lorna-pretrained.pth"
 
-    config.remove_g_criterion("Pixel")
+    config.SOLVER.D_UPDATE_INTERVAL = 50
+    config.EXP.LABEL_SMOOTHING = 0.1
+
     if index == 1:
-        config.add_g_criterion("BestBuddy", BestBuddyLoss(), 1.0)
+        config.add_g_criterion("BestBuddy", BestBuddyLoss(), 50.0)
     elif index == 2:
-        config.add_g_criterion("Gram", GramLoss(), 1.0)
+        config.add_g_criterion("Gram", GramLoss(), 500.0)
     elif index == 3:
-        config.add_g_criterion("PatchwiseST", PatchwiseStructureTensorLoss(), 1.0)
+        config.add_g_criterion("PatchwiseST", PatchwiseStructureTensorLoss(), 100.0)
     elif index == 4:
-        config.add_g_criterion("ST", StructureTensorLoss(), 1.0)
+        config.add_g_criterion("ST", StructureTensorLoss(), 10.0)
     
-    return config
-
-
-def debug_test(config):
-    config.EXP.NAME = "srgan-run2"
-    config.MODEL.CONTINUE_FROM_WARMUP = True
-    config.MODEL.WARMUP_WEIGHTS = "results/SRRESNET/g_best.pth.tar"#"results/SRResNet-lorna-pretrained.pth.tar"
-
     config.remove_g_criterion("Pixel")
-    config.remove_g_criterion("Content")
+    # config.remove_g_criterion("Content")
+
+    # extraction_layers = {"features.3" : 1/8, "features.5" : 1/4, "features.7" : 1/2}
+    # config.add_g_criterion("Content1", DiscriminatorFeaturesLoss(extraction_layers=extraction_layers, config=config), 2.0)
+
     return config
 
 
@@ -93,8 +93,8 @@ if __name__ == "__main__":
     config = Config()
 
     # config = warmup_gan(config, epochs = 5)
-    # config = ablation_study(config, job_index)
-    config = debug_test(config)
+    config = ablation_study(config, job_index)
+
     
     train(config = config)
 

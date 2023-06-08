@@ -49,7 +49,7 @@ SOURCE_DIR=/work3/s204163
 models_to_test=("$SOURCE_DIR"/PW*)
 
 # Get the weights
-model_weights=${models_to_test[i]}/g_best.pth.tar
+model_weights=${models_to_test[i]}/g_best.pth
 exp_name=$(basename ${models_to_test[i]})-TEST
 
 # Test file using python
