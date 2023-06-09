@@ -4,11 +4,15 @@ import numpy as np
 
 class Bicubic(nn.Module):
 
-    def __init__(self):
+    def __init__(self, device:str):
         """
+        Torch module for doing bicubic up- and down sampling.
+
+        The code is a slightly modified version of the code found in this repo:
         https://github.com/tonyzzzt/bicubic-interpolation-pytorch-version-the-same-results-with-matlab-imresize
         """
         super(Bicubic,self).__init__()
+        self.device = device
     
     def cubic(self,x):
         absx = torch.abs(x)
@@ -66,14 +70,14 @@ class Bicubic(nn.Module):
 
         return weight0,weight1,indice0,indice1
 
-    def forward(self,input, scale = 1/4):
+    def forward(self,input, scale = 4):
         [b,c,h,w] = input.shape
         output_size = [b,c,int(h*scale),int(w*scale)]
 
         weight0,weight1,indice0,indice1 = self.contribute([h,w],[int(h*scale),int(w*scale)],scale)
 
         weight0 = np.asarray(weight0[0],dtype = np.float32)
-        weight0 = torch.from_numpy(weight0)
+        weight0 = torch.from_numpy(weight0).to(self.device)
 
         indice0 = np.asarray(indice0[0],dtype = np.float32)
         indice0 = torch.from_numpy(indice0).long()
@@ -82,7 +86,7 @@ class Bicubic(nn.Module):
         A = out.permute(0,1,3,2)
 
         weight1 = np.asarray(weight1[0],dtype = np.float32)
-        weight1 = torch.from_numpy(weight1)
+        weight1 = torch.from_numpy(weight1).to(self.device)
 
         indice1 = np.asarray(indice1[0],dtype = np.float32)
         indice1 = torch.from_numpy(indice1).long()
