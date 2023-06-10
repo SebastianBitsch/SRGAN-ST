@@ -83,6 +83,27 @@ def ablation_study(config: Config, index:int) -> Config:
     return config
 
 
+def quick_study(config, index):
+    config.EXP.NAME = ['plain-fresh-d', 'plain-w-pixel', 'bestbuddy-fresh-d', 'bestbuddy-w-pixel'][index]
+    config.MODEL.G_CONTINUE_FROM_WARMUP = True
+    config.MODEL.G_WARMUP_WEIGHTS = "results/SRResNet-lorna-pretrained.pth"#"results/SRRESNET/g_best.pth.tar"
+
+    if 1 < index:
+        config.add_g_criterion("BestBuddy", BestBuddyLoss(), 50.0)
+
+    if index % 2 == 0: # dont warmup, but use pixel
+        config.MODEL.D_CONTINUE_FROM_WARMUP = False
+        
+    else:               # warmup, but dont pixel
+        config.remove_g_criterion("Content")
+        config.MODEL.D_CONTINUE_FROM_WARMUP = True
+        config.MODEL.D_WARMUP_WEIGHTS = "results/discriminator-lorna-pretrained.pth"
+
+    config.SOLVER.D_UPDATE_INTERVAL = 50
+    config.EXP.LABEL_SMOOTHING = 0.1
+
+    return config
+
 if __name__ == "__main__":
 
     # Get job-index from bash, if the job is not an array it will be zero
@@ -93,7 +114,8 @@ if __name__ == "__main__":
     config = Config()
 
     # config = warmup_gan(config, epochs = 5)
-    config = ablation_study(config, job_index)
+    # config = ablation_study(config, job_index)
+    config = quick_study(config, job_index)
 
     
     train(config = config)

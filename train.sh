@@ -1,13 +1,13 @@
 #!/bin/bash
 
 ### -- set the job Name -- 
-#BSUB -J TRAIN-SRGAN-ST[1-5]%5
+#BSUB -J TRAIN-SRGAN-ST[1-4]%4
 
 ### -- Specify the output and error file. %J is the job-id --
 ### -- -o and -e mean append, -oo and -eo mean overwrite --
 
-#BSUB -o logs/ablation_%J.out
-#BSUB -e logs/ablation_%J.err
+#BSUB -o logs/quick_%J.out
+#BSUB -e logs/quick_%J.err
 # -- end of LSF options --
 
 ### -- specify queue -- 
@@ -23,7 +23,7 @@
 #BSUB -R "span[hosts=1]"
 
 ### -- specify that we need X GB of memory per core/slot -- 
-#BSUB -R "rusage[mem=10GB]"
+#BSUB -R "rusage[mem=5GB]"
 
 ### -- set walltime limit: hh:mm --
 #BSUB -W 24:00

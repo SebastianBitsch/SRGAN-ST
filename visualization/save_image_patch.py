@@ -39,7 +39,12 @@ def save_image_patch(config: Config, generator_names: list[str], image_name:str,
     gt[xmin:xmax,ymin,:] = np.array([0,0,255])
     gt[xmin:xmax,ymax,:] = np.array([0,0,255])
 
+    # Save the entire gt image with red rect
     cv2.imwrite(f"{base_path}/gt.png", gt)
+    # Save the gt patch
+    gt_patch = gt[xmin:xmax, ymin:ymax, :]
+    cv2.imwrite(f"{base_path}/{image_name}_gt.png", gt_patch)
+
 
     with torch.no_grad():
         for generator_name in generator_names:
