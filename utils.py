@@ -13,7 +13,7 @@ def init_random_seed(seed:int = 0) -> None:
     np.random.seed(seed)
     random.seed(seed)
 
-    torch.backends.cudnn.benchmark = False
+    torch.backends.cudnn.benchmark = True # See: https://discuss.pytorch.org/t/what-does-torch-backends-cudnn-benchmark-do/5936/2
     torch.backends.cudnn.deterministic = True
     torch.manual_seed(seed)
     torch.cuda.manual_seed(seed)
