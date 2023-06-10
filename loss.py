@@ -51,7 +51,6 @@ class ContentLoss(nn.Module):
         # Extract the output of given layers in the VGG19 model
         self.feature_extractor = create_feature_extractor(vgg, list(extraction_layers))
 
-        # This is the VGG model preprocessing method of the ImageNet dataset.
         # The mean and std of ImageNet. See: https://stackoverflow.com/questions/58151507/why-pytorch-officially-use-mean-0-485-0-456-0-406-and-std-0-229-0-224-0-2
         self.normalize = transforms.Normalize(mean = [0.485, 0.456, 0.406], std = [0.229, 0.224, 0.225])
 
@@ -60,11 +59,11 @@ class ContentLoss(nn.Module):
             model_parameters.requires_grad = False
 
         # Set to validation mode
-        self.feature_extractor.eval()
+        self.feature_extractor = self.feature_extractor.eval()
 
-    def forward(self, sr_tensor: Tensor, gt_tensor: Tensor) -> Tensor:
-        sr_features = self.feature_extractor(self.normalize(sr_tensor))
-        gt_features = self.feature_extractor(self.normalize(gt_tensor))
+    def forward(self, x: Tensor, gt: Tensor) -> Tensor:
+        sr_features = self.feature_extractor(self.normalize(x))
+        gt_features = self.feature_extractor(self.normalize(gt))
 
         # Calculate difference/loss between the VGG feature representation of the two images
         loss = torch.tensor(0.0, device = self.device)
@@ -212,50 +211,45 @@ class GramLoss(nn.Module):
 
 class DiscriminatorFeaturesLoss(nn.Module):
     
-    def __init__(self, extraction_layers: dict[str, float], config) -> None:
+    def __init__(self, extraction_layers: dict[str, float], config, criterion:str = "mse") -> None:
         super(DiscriminatorFeaturesLoss, self).__init__()
-        self.device = config.DEVICE
-        self.activations = defaultdict(list)
+            
+        if criterion == 'l1':
+            self.criterion = torch.nn.L1Loss()
+        elif criterion == 'l2' or criterion == 'mse':
+            self.criterion = torch.nn.MSELoss()
+        else:
+            raise NotImplementedError('%s criterion has not been implmented.' % criterion)
+
+        # Get the name of the specified feature extraction node
         self.extraction_layers = extraction_layers
+        self.device = config.DEVICE
 
-    def register_descriminator(self, discriminator: Discriminator):
-        # Add hooks to all the layers which will update the self.activations value whenever forwards is called on the model
-        for layer_name, _ in self.extraction_layers.items():
-            layer = self.get_layer_by_name(discriminator, layer_name)
-            layer.register_forward_hook(self.get_activation(layer_name))
+        # Load the VGG19 model trained on the ImageNet dataset.
+        discriminator = Discriminator(config=config)
 
-    def get_layer_by_name(self, model, layer_name):
-        """ Get a reference to a given layer of a torch network"""
-        names = layer_name.split(sep='.')
-        return reduce(getattr, names, model)
+        # Extract the output of given layers in the VGG19 model
+        self.feature_extractor = create_feature_extractor(discriminator, list(extraction_layers))
 
+        # The mean and std of ImageNet. See: https://stackoverflow.com/questions/58151507/why-pytorch-officially-use-mean-0-485-0-456-0-406-and-std-0-229-0-224-0-2
+        self.normalize = transforms.Normalize(mean = [0.485, 0.456, 0.406], std = [0.229, 0.224, 0.225])
 
-    def get_activation(self, name):
-        def hook(_model, _input, output):
-            # input: torch.Size([1, 64, 46, 46])
-            self.activations[name].append(output.detach())
-        return hook
+        # Freeze model parameters.
+        for model_parameters in self.feature_extractor.parameters():
+            model_parameters.requires_grad = False
 
+        # Set to validation mode
+        self.feature_extractor = self.feature_extractor.eval()
 
-    def forward(self, _x, _gt):
-        """
-        Inputs _x and _gt arent used as the values we really need (the activations) will 
-        already have been written to self.activations via the webhook. This happens during 
-        the forward pass of the discriminator
-        """
-        loss = torch.tensor(0.0, device=self.device)
-        for layer_name, vals in self.activations.items():
-            if len(vals) < 2:
-                print("Should never happen fix your code")
-                continue
-            x = vals[-2]
-            gt = vals[-1]
-            weight = self.extraction_layers[layer_name]
-            # loss += weight * torch.nn.L1Loss(reduction='mean')(x, gt)
-            loss += weight * F.mse_loss(x, gt)
+    def forward(self, x, gt):
+        sr_features = self.feature_extractor(self.normalize(x))
+        gt_features = self.feature_extractor(self.normalize(gt))
 
-        # Clear the dict
-        self.activations = defaultdict(list)
+        # Calculate difference/loss between the VGG feature representation of the two images
+        loss = torch.tensor(0.0, device = self.device)
+        for layer_name, weight in self.extraction_layers.items():
+            loss += weight * self.criterion(sr_features[layer_name], gt_features[layer_name])
+        
         return loss
 
 
@@ -294,8 +288,8 @@ class PatchwiseStructureTensorLoss(nn.Module):
         x = x.squeeze()                                             #-> torch.Size([16, 64, 64, 3, 3, 3])
         x = x.reshape(B, -1, 3, self.ksize, self.ksize)    #-> torch.Size([16, 4096, 3, 3, 3])
 
-        batched_gram = torch.func.vmap(torch.func.vmap(self.s_norm))
-        x = batched_gram(x)                                 #-> torch.Size([16, 4096, 3, 3])
+        batched_structuretensor = torch.func.vmap(torch.func.vmap(self.s_norm))
+        x = batched_structuretensor(x)                                 #-> torch.Size([16, 4096, 3, 3])
         x = x.reshape(B, -1, 3 * self.ksize * self.ksize)       #-> torch.Size([16, 4096, 9])
         return x
 
