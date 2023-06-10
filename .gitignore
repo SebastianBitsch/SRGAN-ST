@@ -1,20 +1,13 @@
-.env*
-*.tif
-*.tiff
-femur_01
-*.cpython*
+.env
 .ipynb_checkpoints
 __pycache__
-logs
+logs/
+plots/
 data/
-results
-tensorboard
+results/
+tensorboard/
 *.err
 *.out
 
 .DS_Store
 .png
-
-train_legacy.py
-playground.py
-loss-experiments.ipynb
