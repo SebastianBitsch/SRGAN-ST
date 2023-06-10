@@ -28,6 +28,8 @@ class Config():
     # Logging options
     LOG_TRAIN_PERIOD = 100          # How many iterations should be between each print loss statement when training
     LOG_VALIDATION_PERIOD = 1       # How many iterations should be between each psnr/ssim log statement when validating
+    D_CHECKPOINT_INTERVAL = 100     # How many epochs should be between every time the discriminator state dict is saved
+    G_CHECKPOINT_INTERVAL = 100     # How many epochs should be between every time the generator state dict is saved
 
     # Data
     DATA = dotdict()
@@ -64,7 +66,8 @@ class Config():
     }
     # The layers and weights from the discriminator to use in the DiscriminatorFeaturesLoss()
     MODEL.G_LOSS.DISC_FEATURES_LOSS_LAYERS = {
-        "features.5" : 1.0
+        "features.4" : 1/4,
+        "features.10" : 1/2,
     }
     # The loss functions used in the generator by default. More can be added after instantiating
     MODEL.G_LOSS.CRITERIONS = {

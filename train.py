@@ -51,9 +51,10 @@ def train(config: Config = None):
     discriminator = Discriminator(config).to(config.DEVICE)
     generator = Generator(config).to(config.DEVICE)
     
-    if "Content1" in config.MODEL.G_LOSS.CRITERIONS: #TODO: nicer
-        config.MODEL.G_LOSS.CRITERIONS['Content1'].register_descriminator(discriminator)
-
+    # Compile models to make them faster
+    generator = torch.compile(generator)
+    discriminator = torch.compile(discriminator)
+    
     # Define losses
     adversarial_criterion = torch.nn.BCEWithLogitsLoss().to(config.DEVICE)
 
@@ -206,16 +207,23 @@ def train(config: Config = None):
         # ----------------
         #  Save best model
         # ----------------
-        is_best = best_psnr < psnr and best_ssim < ssim
-        is_last = config.EXP.START_EPOCH + epoch == config.EXP.N_EPOCHS - 1
-
         results_dir = f"results/{config.EXP.NAME}"
         os.makedirs(results_dir, exist_ok=True)
-        if is_last:
-            torch.save(generator.state_dict(), results_dir  + "/g_last.pth")
-            torch.save(discriminator.state_dict(), results_dir  + "/d_last.pth")
+        
+        # Always latest states, will be overwritten next epoch - but will eventually contain the last epoch weights
+        torch.save(generator.state_dict(), results_dir  + "/g_last.pth")
+        torch.save(discriminator.state_dict(), results_dir  + "/d_last.pth")
+
+        # Save the models if they are the new best best
+        is_best = best_psnr < psnr and best_ssim < ssim
         if is_best:
             torch.save(generator.state_dict(), results_dir  + "/g_best.pth")
             torch.save(discriminator.state_dict(), results_dir  + "/d_best.pth")
             best_psnr = psnr
             best_ssim = ssim
+
+        # Chechpoint generator and discriminator
+        if epoch % config.G_CHECKPOINT_INTERVAL == 0:
+            torch.save(generator.state_dict(), results_dir  + f"/g_epoch{epoch}.pth")
+        if epoch % config.D_CHECKPOINT_INTERVAL == 0:
+            torch.save(generator.state_dict(), results_dir  + f"/g_epoch{epoch}.pth")
