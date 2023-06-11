@@ -226,7 +226,7 @@ class DiscriminatorFeaturesLoss(nn.Module):
         self.device = config.DEVICE
 
         # Load the VGG19 model trained on the ImageNet dataset.
-        discriminator = Discriminator(config=config)
+        discriminator = Discriminator(config=config).to(device=self.device)
 
         # Extract the output of given layers in the VGG19 model
         self.feature_extractor = create_feature_extractor(discriminator, list(extraction_layers))
