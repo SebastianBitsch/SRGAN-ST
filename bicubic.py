@@ -2,6 +2,16 @@ import torch
 import torch.nn as nn
 import numpy as np
 
+class NearestNeighbourUpscale(nn.Module):
+    def __init__(self, scale_factor:int = 4) -> None:
+        """ Simple nearest neighbour upscaler """
+        super(NearestNeighbourUpscale, self).__init__()
+        self.upsampler = nn.Upsample(scale_factor=scale_factor)
+        
+    def forward(self, x):
+        return self.upsampler(x)
+
+
 class Bicubic(nn.Module):
 
     def __init__(self, device:str = "cuda:0"):
