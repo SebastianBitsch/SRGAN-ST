@@ -9,8 +9,9 @@ from config import Config
 from torch.utils.data import DataLoader
 from dataset import TestImageDataset
 from model import Generator
-from utils import bgr2ycbcr, tensor2img, PSNR, SSIM
+from utils import load_state_dict, bgr2ycbcr, tensor2img, PSNR, SSIM
 from bicubic import Bicubic
+
 
 def test(config: Config, save_images: bool = True, g_path: str = None, concat_w_gt: bool = False):
     """
@@ -36,7 +37,7 @@ def test(config: Config, save_images: bool = True, g_path: str = None, concat_w_
         generator = Bicubic(device=config.DEVICE).to(config.DEVICE)
     else:
         generator = Generator(config).to(config.DEVICE)
-        generator.load_state_dict(torch.load(g_path))
+        generator = load_state_dict(generator, torch.load(g_path))
 
     # Test
     psnr, ssim = _validate(generator=generator, val_loader=test_dataloader, config=config, save_images=save_images, concat_with_gt=concat_w_gt)
@@ -87,12 +88,11 @@ if __name__ == "__main__":
     config = Config()
 
     # Set the model to test - model should be in /results/ folder, else use gpath parameter for test func
-    config.EXP.NAME = "plain-w-pixel"
+    config.EXP.NAME = "bb-no-pixel"
 
     # Set the dataset to test on
-    config.DATA.TEST_SET = "Urban100"
+    config.DATA.TEST_SET = "Set5"
     config.DATA.TEST_GT_IMAGES_DIR = F"/work3/{config.EXP.USER}/data/{config.DATA.TEST_SET}/GTmod12"
     config.DATA.TEST_LR_IMAGES_DIR = f"/work3/{config.EXP.USER}/data/{config.DATA.TEST_SET}/LRbicx4"
 
-    gpath = "results/SRResNet-lorna-pretrained.pth"
-    test(config = config, save_images = True, concat_w_gt = False, g_path=gpath)
+    test(config = config, save_images = True, concat_w_gt = False)

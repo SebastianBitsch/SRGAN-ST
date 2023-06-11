@@ -1,8 +1,10 @@
 import random
 import cv2
 import math
+from collections import OrderedDict
 
 import torch
+from torch import nn
 import numpy as np
 
 from torchvision.utils import make_grid
@@ -18,6 +20,43 @@ def init_random_seed(seed:int = 0) -> None:
     torch.manual_seed(seed)
     torch.cuda.manual_seed(seed)
     torch.cuda.manual_seed_all(seed)
+
+
+def load_state_dict(model: nn.Module, state_dict: dict) -> nn.Module:
+    """
+    Load model weights and parameters of a model state-dict.
+    This is essentially a wrapper around the inbuilt torch.load_state_dict() to account for a missing
+    feature in PyTorch at the moment where state dicts of compiled models cant be loaded in using the
+    load_state_dict function. See: https://github.com/pytorch/pytorch/issues/101107#issuecomment-1542688089
+
+    The layernames in a compiled model are prepended with _orig_mod. - we just need to remove this
+    """
+
+    model_is_compiled = "_orig_mod" in list(state_dict.keys())[0]
+
+    # Process parameter dictionary
+    model_state_dict = model.state_dict()
+    new_state_dict = OrderedDict()
+
+    # Check if the model has been compiled
+    for layer_name, weights in state_dict.items():
+
+        if model_is_compiled:
+            name = layer_name[10:]
+        else:
+            name = layer_name
+        new_state_dict[name] = weights
+    state_dict = new_state_dict
+
+    # Traverse the model parameters, load the parameters in the pre-trained model into the current model
+    new_state_dict = {k: v for k, v in state_dict.items() if
+                      k in model_state_dict.keys() and v.size() == model_state_dict[k].size()}
+
+    # update model parameters
+    model_state_dict.update(new_state_dict)
+    model.load_state_dict(model_state_dict)
+
+    return model
 
 
 def tensor2img(tensor:torch.Tensor, out_type = np.uint8, min_max = (0, 1)) -> np.ndarray:
