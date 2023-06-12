@@ -1,7 +1,7 @@
 import os
 from config import Config
 from train import train
-from warmup_generator import warmup
+from warmup import warmup
 from validate import test
 from loss import BestBuddyLoss, GramLoss, PatchwiseStructureTensorLoss, StructureTensorLoss, ContentLossDiscriminator
 
