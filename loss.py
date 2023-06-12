@@ -23,7 +23,7 @@ class ContentLossVGG(nn.Module):
         See: https://www.researchgate.net/figure/llustration-of-the-network-architecture-of-VGG-19-model-conv-means-convolution-FC-means_fig2_325137356
      """
 
-    def __init__(self, extraction_layers: dict[str, float], device:str, criterion:str = "mse") -> None:
+    def __init__(self, config, criterion:str = "mse") -> None:
         """
         Content loss (in SRGAN) / Perceptual loss (in GramGAN).
         Follows the method outlined in GramGAN paper for computing a loss from the activation layer 
@@ -42,14 +42,14 @@ class ContentLossVGG(nn.Module):
             raise NotImplementedError('%s criterion has not been implmented.' % criterion)
 
         # Get the name of the specified feature extraction node
-        self.extraction_layers = extraction_layers
-        self.device = device
+        self.extraction_layers = config.MODEL.G_LOSS.VGG19_LAYERS
+        self.device = config.DEVICE
 
         # Load the VGG19 model trained on the ImageNet dataset.
-        vgg = models.vgg19(weights=models.VGG19_Weights.IMAGENET1K_V1).to(device)
+        vgg = models.vgg19(weights=models.VGG19_Weights.IMAGENET1K_V1).to(self.device)
 
         # Extract the output of given layers in the VGG19 model
-        self.feature_extractor = create_feature_extractor(vgg, list(extraction_layers))
+        self.feature_extractor = create_feature_extractor(vgg, list(self.extraction_layers))
 
         # The mean and std of ImageNet. See: https://stackoverflow.com/questions/58151507/why-pytorch-officially-use-mean-0-485-0-456-0-406-and-std-0-229-0-224-0-2
         self.normalize = transforms.Normalize(mean = [0.485, 0.456, 0.406], std = [0.229, 0.224, 0.225])
@@ -211,7 +211,7 @@ class GramLoss(nn.Module):
 
 class ContentLossDiscriminator(nn.Module):
     
-    def __init__(self, extraction_layers: dict[str, float], config, criterion:str = "mse") -> None:
+    def __init__(self, config, criterion:str = "mse") -> None:
         super(ContentLossDiscriminator, self).__init__()
             
         if criterion == 'l1':
@@ -222,14 +222,14 @@ class ContentLossDiscriminator(nn.Module):
             raise NotImplementedError('%s criterion has not been implmented.' % criterion)
 
         # Get the name of the specified feature extraction node
-        self.extraction_layers = extraction_layers
+        self.extraction_layers = config.MODEL.G_LOSS.DISC_FEATURES_LOSS_LAYERS
         self.device = config.DEVICE
 
         # Load the VGG19 model trained on the ImageNet dataset.
         discriminator = Discriminator(config=config).to(device=self.device)
 
         # Extract the output of given layers in the VGG19 model
-        self.feature_extractor = create_feature_extractor(discriminator, list(extraction_layers))
+        self.feature_extractor = create_feature_extractor(discriminator, list(self.extraction_layers))
 
         # The mean and std of ImageNet. See: https://stackoverflow.com/questions/58151507/why-pytorch-officially-use-mean-0-485-0-456-0-406-and-std-0-229-0-224-0-2
         self.normalize = transforms.Normalize(mean = [0.485, 0.456, 0.406], std = [0.229, 0.224, 0.225])
