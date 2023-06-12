@@ -11,14 +11,15 @@ from dataset import TrainImageDataset, TestImageDataset
 from utils import init_random_seed
 from validate import _validate
 
-def warmup(config: Config = None):
+def warmup(config: Config):
 
     # Set seed
     init_random_seed(config.DATA.SEED)
 
     # House keeping variables
     batches_done = 0
-    best_psnr = best_ssim = 0.0
+    best_psnr = 0.0
+    best_ssim = 0.0
     loss_values = dict()
 
     # Define model
@@ -144,3 +145,8 @@ def warmup(config: Config = None):
         # Chechpoint generator and discriminator
         if 0 < epoch and epoch % config.G_CHECKPOINT_INTERVAL == 0:
             torch.save(generator.state_dict(), results_dir  + f"/g_epoch{epoch}.pth")
+
+
+if __name__ == "__main__":
+    config = Config()
+    warmup(config)
