@@ -1,16 +1,19 @@
 import cv2
 import os
 import sys
+import inspect
 
 import numpy as np
 import torch
 from torchvision.io import read_image
 
-# Make us able to import from dir above, sorta hacky
-sys.path.append("..")
+# Weird hacky way of importing modules from parent directory. See: https://stackoverflow.com/a/11158224/19877091
+currentdir = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
+parentdir = os.path.dirname(currentdir)
+sys.path.insert(0, parentdir) 
 from config import Config
 from model import Generator
-from utils import tensor2img
+from utils import tensor2img, load_state_dict
 
 def save_image_patch(config: Config, generator_names: list[str], image_name:str, xmin:int, xmax:int, ymin:int, ymax:int) -> None:
     """
@@ -33,6 +36,10 @@ def save_image_patch(config: Config, generator_names: list[str], image_name:str,
     gt = tensor2img(read_image(gt_path).float() / 255.0)
     lr = read_image(lr_path).float().to(config.DEVICE).unsqueeze(0) / 255.0
 
+    # Save the gt patch
+    gt_patch = gt[xmin:xmax, ymin:ymax, :]
+    cv2.imwrite(f"{base_path}/{image_name}_gt.png", gt_patch)
+
     # Draw red rect on gt image
     gt[xmin,ymin:ymax,:] = np.array([0,0,255])
     gt[xmax,ymin:ymax,:] = np.array([0,0,255])
@@ -41,9 +48,6 @@ def save_image_patch(config: Config, generator_names: list[str], image_name:str,
 
     # Save the entire gt image with red rect
     cv2.imwrite(f"{base_path}/gt.png", gt)
-    # Save the gt patch
-    gt_patch = gt[xmin:xmax, ymin:ymax, :]
-    cv2.imwrite(f"{base_path}/{image_name}_gt.png", gt_patch)
 
 
     with torch.no_grad():
@@ -52,7 +56,7 @@ def save_image_patch(config: Config, generator_names: list[str], image_name:str,
             # Load weights of generator
             generator = Generator(config).to(config.DEVICE)
             weights = torch.load(f"results/{generator_name}/g_best.pth")
-            generator.load_state_dict(weights)
+            generator = load_state_dict(generator, weights)
 
             sr = generator(lr)
             output = tensor2img(sr)
@@ -69,6 +73,6 @@ if __name__ == "__main__":
     config.DATA.TEST_LR_IMAGES_DIR = f"/work3/{config.EXP.USER}/data/{config.DATA.TEST_SET}/LRbicx4"
 
     image_name = "baboon"
-    models = ["resnet20", 'resnet5']
+    models = ["resnet50"]
 
     save_image_patch(config=config, generator_names=models, image_name=image_name, xmin=20, xmax = 100, ymin = 0, ymax = 200)
