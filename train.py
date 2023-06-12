@@ -9,7 +9,7 @@ from config import Config
 from model import Generator, Discriminator
 from dataset import TrainImageDataset, TestImageDataset
 
-from utils import init_random_seed
+from utils import init_random_seed, load_state_dict
 from validate import _validate
 
 
@@ -51,9 +51,8 @@ def train(config: Config = None):
     discriminator = Discriminator(config).to(config.DEVICE)
     generator = Generator(config).to(config.DEVICE)
     
-    # Compile models to make them faster
+    # Compile generator to make it faster
     generator = torch.compile(generator)
-    discriminator = torch.compile(discriminator)
     
     # Define losses
     adversarial_criterion = torch.nn.BCEWithLogitsLoss().to(config.DEVICE)
@@ -89,11 +88,11 @@ def train(config: Config = None):
     # Should model weights be loaded from warmup?
     if config.MODEL.G_CONTINUE_FROM_WARMUP:
         weights = torch.load(config.MODEL.G_WARMUP_WEIGHTS)
-        generator.load_state_dict(weights, strict=False)
+        generator = load_state_dict(generator, weights)# .load_state_dict(weights, strict=False)
 
     if config.MODEL.D_CONTINUE_FROM_WARMUP:
         weights = torch.load(config.MODEL.D_WARMUP_WEIGHTS)
-        discriminator.load_state_dict(weights, strict=False)
+        discriminator = load_state_dict(discriminator, weights) # discriminator.load_state_dict(weights, strict=False)
 
     # Init Tensorboard writer to store train and test info
     # also save the config used in this run to Tensorboard
@@ -135,9 +134,6 @@ def train(config: Config = None):
                 if name == 'Adversarial':
                     loss = criterion(discriminator(sr), real_label)
                 else:
-                    if name == "Content1":
-                        _ = discriminator(sr.detach())
-                        _ = discriminator(gt.detach())
                     loss = criterion(sr, gt)
                 
                 g_loss = g_loss + (loss * weight)
@@ -223,7 +219,7 @@ def train(config: Config = None):
             best_ssim = ssim
 
         # Chechpoint generator and discriminator
-        if epoch % config.G_CHECKPOINT_INTERVAL == 0:
+        if 0 < epoch and epoch % config.G_CHECKPOINT_INTERVAL == 0:
             torch.save(generator.state_dict(), results_dir  + f"/g_epoch{epoch}.pth")
-        if epoch % config.D_CHECKPOINT_INTERVAL == 0:
-            torch.save(generator.state_dict(), results_dir  + f"/g_epoch{epoch}.pth")
+        if 0 < epoch and epoch % config.D_CHECKPOINT_INTERVAL == 0:
+            torch.save(discriminator.state_dict(), results_dir  + f"/d_epoch{epoch}.pth")

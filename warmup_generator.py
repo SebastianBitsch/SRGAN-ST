@@ -12,7 +12,6 @@ from utils import init_random_seed
 from validate import _validate
 
 def warmup(config: Config = None):
-    config.EXP.NAME = f"resnet-{config.EXP.NAME}"
 
     # Set seed
     init_random_seed(config.DATA.SEED)
@@ -24,6 +23,7 @@ def warmup(config: Config = None):
 
     # Define model
     generator = Generator(config).to(config.DEVICE)
+    generator = torch.compile(generator)
 
     optimizer = torch.optim.Adam(
         params = generator.parameters(),
@@ -87,9 +87,9 @@ def warmup(config: Config = None):
             loss = torch.tensor(0.0, device=config.DEVICE)
             for name, criterion in config.MODEL.G_LOSS.WARMUP_CRITERIONS.items():
                 weight = config.MODEL.G_LOSS.WARMUP_WEIGHTS[name]
-                l = criterion(sr, gt) * weight
-                loss += l
-                loss_values[name] = l.item() # Used for logging to Tensorboard
+                l = criterion(sr, gt)
+                loss = loss + (l * weight)
+                loss_values[name] = (l * weight).item() # Used for logging to Tensorboard
 
             loss.backward()
             optimizer.step()
@@ -127,14 +127,20 @@ def warmup(config: Config = None):
         # ----------------
         #  Save best model
         # ----------------
-        is_best = best_psnr < psnr and best_ssim < ssim
-        is_last = config.EXP.START_EPOCH + epoch == config.EXP.N_EPOCHS - 1
 
         results_dir = f"results/{config.EXP.NAME}"
         os.makedirs(results_dir, exist_ok=True)
-        if is_last:
-            torch.save(generator.state_dict(), results_dir  + "/g_last.pth")
+
+        # Always latest states, will be overwritten next epoch - but will eventually contain the last epoch weights
+        torch.save(generator.state_dict(), results_dir  + "/g_last.pth")
+
+        # Save the models if they are the new best best
+        is_best = best_psnr < psnr and best_ssim < ssim
         if is_best:
             torch.save(generator.state_dict(), results_dir  + "/g_best.pth")
             best_psnr = psnr
             best_ssim = ssim
+
+        # Chechpoint generator and discriminator
+        if 0 < epoch and epoch % config.G_CHECKPOINT_INTERVAL == 0:
+            torch.save(generator.state_dict(), results_dir  + f"/g_epoch{epoch}.pth")

@@ -3,7 +3,7 @@ from config import Config
 from train import train
 from warmup_generator import warmup
 from validate import test
-from loss import BestBuddyLoss, GramLoss, PatchwiseStructureTensorLoss, StructureTensorLoss, DiscriminatorFeaturesLoss
+from loss import BestBuddyLoss, GramLoss, PatchwiseStructureTensorLoss, StructureTensorLoss, ContentLossDiscriminator
 
 
 def get_jobindex(fallback:int = 0) -> int:
@@ -12,23 +12,14 @@ def get_jobindex(fallback:int = 0) -> int:
     return int(num) if num else fallback
 
 
-def srgan(config: Config) -> Config:
-    config.EXP.NAME = "srgan-with-resnet"
-    config.MODEL.CONTINUE_FROM_WARMUP = True
-    return config
 
 def warmup_gan(config: Config, epochs:int = 5) -> Config:
     """ Warmup the generator """
     config.EXP.N_EPOCHS = epochs
     config.EXP.NAME = f"resnet{epochs}"
+    config.G_CHECKPOINT_INTERVAL = 5
     return config
 
-def warmup_experiment(config: Config, index:int) -> Config:
-    """ Run a warmup experiment where we test how warming up and label smoothing performs """
-    config.EXP.NAME = ['warmup-exp', 'labelsmoothing-exp', 'warmup-labelsmoothing-exp'][index]
-    config.EXP.LABEL_SMOOTHING = [0, 0.1, 0.1][index]
-    config.EXP.N_WARMUP_BATCHES = [5000, 0, 5000][index]
-    return config
 
 def srgan_bbgan(config: Config, index:int) -> Config:
     """ stock srgan vs bbgan"""
@@ -41,30 +32,19 @@ def srgan_bbgan(config: Config, index:int) -> Config:
     return config
 
 
-def test_gramloss(config: Config) -> Config:
-    config.EXP.NAME = "gram-model"
-    config.add_g_criterion("Gram", GramLoss(), 10.0)
-    return config
-
-
-def test_st_losses(config: Config) -> Config:
-    config.EXP.NAME = "st-now"
-    config.EXP.N_EPOCHS = 3
-    config.add_g_criterion("PatchwiseSTLoss", PatchwiseStructureTensorLoss(sigma=5))
-    config.add_g_criterion("STLoss", StructureTensorLoss(sigma=5))
-    return config
-
 
 def ablation_study(config: Config, index:int) -> Config:
-    config.EXP.NAME = ['ablation-c-plain', 'ablation-c-bestbuddy', 'ablation-c-gram', 'ablation-c-patchwise-st', 'ablation-c-st'][index]
+    config.EXP.NAME = ['ablation-plain', 'ablation-bestbuddy', 'ablation-gram', 'ablation-patchwise-st', 'ablation-st'][index]
     config.MODEL.G_CONTINUE_FROM_WARMUP = True
-    config.MODEL.G_WARMUP_WEIGHTS = "results/SRResNet-lorna-pretrained.pth"#"results/SRRESNET/g_best.pth.tar"
-    config.MODEL.D_CONTINUE_FROM_WARMUP = True
-    config.MODEL.D_WARMUP_WEIGHTS = "results/discriminator-lorna-pretrained.pth"
-
-    config.SOLVER.D_UPDATE_INTERVAL = 50
+    config.MODEL.G_WARMUP_WEIGHTS = "results/SRResNet-lorna-pretrained.pth"
+    config.SOLVER.D_UPDATE_INTERVAL = 100
     config.EXP.LABEL_SMOOTHING = 0.1
+    config.G_CHECKPOINT_INTERVAL = 5
 
+    config.remove_g_criterion("Pixel")
+
+    if index == 0: # srgan
+        pass
     if index == 1:
         config.add_g_criterion("BestBuddy", BestBuddyLoss(), 50.0)
     elif index == 2:
@@ -74,35 +54,26 @@ def ablation_study(config: Config, index:int) -> Config:
     elif index == 4:
         config.add_g_criterion("ST", StructureTensorLoss(), 10.0)
     
-    config.remove_g_criterion("Pixel")
-    # config.remove_g_criterion("Content")
-
-    # extraction_layers = {"features.3" : 1/8, "features.5" : 1/4, "features.7" : 1/2}
-    # config.add_g_criterion("Content1", DiscriminatorFeaturesLoss(extraction_layers=extraction_layers, config=config), 2.0)
-
     return config
 
-
-def quick_study(config, index):
-    config.EXP.NAME = ['plain-fresh-d', 'plain-w-pixel', 'bestbuddy-fresh-d', 'bestbuddy-w-pixel'][index]
+def best_buddy_test(config, i):
+    config.EXP.NAME = ['bb-no-pixel-w-warmup', 'bb-content1', 'bb-w-pixel-content0'][i]
+    config.SOLVER.D_UPDATE_INTERVAL = 100
+    config.EXP.LABEL_SMOOTHING = 0.1
+    config.add_g_criterion("BestBuddy", BestBuddyLoss(), 50.0)
     config.MODEL.G_CONTINUE_FROM_WARMUP = True
     config.MODEL.G_WARMUP_WEIGHTS = "results/SRResNet-lorna-pretrained.pth"#"results/SRRESNET/g_best.pth.tar"
 
-    if 1 < index:
-        config.add_g_criterion("BestBuddy", BestBuddyLoss(), 50.0)
-
-    if index % 2 == 0: # dont warmup, but use pixel
-        config.MODEL.D_CONTINUE_FROM_WARMUP = False
-        
-    else:               # warmup, but dont pixel
-        config.remove_g_criterion("Content")
-        config.MODEL.D_CONTINUE_FROM_WARMUP = True
-        config.MODEL.D_WARMUP_WEIGHTS = "results/discriminator-lorna-pretrained.pth"
-
-    config.SOLVER.D_UPDATE_INTERVAL = 50
-    config.EXP.LABEL_SMOOTHING = 0.1
-
+    if i == 0:
+        config.remove_g_criterion("Pixel")
+    elif i == 1:
+        config.remove_g_criterion("ContentVGG")
+        config.add_g_criterion("ContentDiscriminator", ContentLossDiscriminator(extraction_layers=config.MODEL.G_LOSS.DISC_FEATURES_LOSS_LAYERS, config=config), 2.0)
+    elif i == 2:
+        pass
+    
     return config
+
 
 if __name__ == "__main__":
 
@@ -113,13 +84,9 @@ if __name__ == "__main__":
     # Edit config based on 
     config = Config()
 
-    # config = warmup_gan(config, epochs = 5)
-    # config = ablation_study(config, job_index)
-    config = quick_study(config, job_index)
+    config = ablation_study(config, job_index)
 
-    
     train(config = config)
-
     test(config = config, save_images = True)
 
     print(f"Finished job: {job_index}")

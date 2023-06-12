@@ -88,7 +88,7 @@ if __name__ == "__main__":
     config = Config()
 
     # Set the model to test - model should be in /results/ folder, else use gpath parameter for test func
-    config.EXP.NAME = "bb-no-pixel"
+    config.EXP.NAME = "resnet50"
 
     # Set the dataset to test on
     config.DATA.TEST_SET = "Set5"

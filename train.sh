@@ -1,13 +1,13 @@
 #!/bin/bash
 
 ### -- set the job Name -- 
-#BSUB -J TRAIN-SRGAN-ST[1-4]%4
+#BSUB -J TRAIN-SRGAN-ST[1-5]%5
 
 ### -- Specify the output and error file. %J is the job-id --
 ### -- -o and -e mean append, -oo and -eo mean overwrite --
 
-#BSUB -o logs/quick_%J.out
-#BSUB -e logs/quick_%J.err
+#BSUB -o logs/ablation_%J.out
+#BSUB -e logs/ablation_%J.err
 # -- end of LSF options --
 
 ### -- specify queue -- 

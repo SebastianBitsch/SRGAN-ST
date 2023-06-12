@@ -11,7 +11,7 @@ from model import Discriminator
 
 from utils import batch_pairwise_distance, structure_tensor, normalize, compute_invS1xS2, compute_eigenvalues, compute_distance
 
-class ContentLoss(nn.Module):
+class ContentLossVGG(nn.Module):
     """Constructs a content loss function based on the VGG19 network.
     Using high-level feature mapping layers from the latter layers will focus more on the texture content of the image.
 
@@ -32,7 +32,7 @@ class ContentLoss(nn.Module):
         Parameters
             extraction_layers (dict): A dict of layer
         """
-        super(ContentLoss, self).__init__()
+        super(ContentLossVGG, self).__init__()
 
         if criterion == 'l1':
             self.criterion = torch.nn.L1Loss()
@@ -209,10 +209,10 @@ class GramLoss(nn.Module):
 
 
 
-class DiscriminatorFeaturesLoss(nn.Module):
+class ContentLossDiscriminator(nn.Module):
     
     def __init__(self, extraction_layers: dict[str, float], config, criterion:str = "mse") -> None:
-        super(DiscriminatorFeaturesLoss, self).__init__()
+        super(ContentLossDiscriminator, self).__init__()
             
         if criterion == 'l1':
             self.criterion = torch.nn.L1Loss()
