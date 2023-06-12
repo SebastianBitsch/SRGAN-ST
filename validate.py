@@ -1,5 +1,6 @@
 import cv2
 import os
+import argparse
 
 import numpy as np
 import torch
@@ -10,12 +11,12 @@ from torch.utils.data import DataLoader
 from dataset import TestImageDataset
 from model import Generator
 from utils import load_state_dict, bgr2ycbcr, tensor2img, PSNR, SSIM
-from bicubic import Bicubic
+from bicubic import Bicubic, NearestNeighbourUpscale
 
 
 def test(config: Config, save_images: bool = True, g_path: str = None, concat_w_gt: bool = False):
     """
-    Test a generator, if not path to generator is given the generator at current exp-name is used.
+    Test a generator, if no path to generator is given the generator at current exp.name is used.
     """
     if not g_path:
         g_path = f"results/{config.EXP.NAME}/g_best.pth"
@@ -35,13 +36,16 @@ def test(config: Config, save_images: bool = True, g_path: str = None, concat_w_
     # Initialize generator and load weights
     if config.EXP.NAME == "bicubic":
         generator = Bicubic(device=config.DEVICE).to(config.DEVICE)
+    elif config.EXP.NAME == "nearest":
+        generator = NearestNeighbourUpscale(config.DATA.UPSCALE_FACTOR).to(config.DEVICE)
     else:
         generator = Generator(config).to(config.DEVICE)
         generator = load_state_dict(generator, torch.load(g_path))
+        generator.eval()
 
     # Test
     psnr, ssim = _validate(generator=generator, val_loader=test_dataloader, config=config, save_images=save_images, concat_with_gt=concat_w_gt)
-    print(f"[Test] [PSNR: {psnr}] [SSIM: {ssim}]")
+    print(f"[Test] [PSNR: {psnr:.2f}] [SSIM: {ssim:.4f}]")
 
 
 def _validate(generator, val_loader: DataLoader, config: Config, save_images:bool = False, concat_with_gt:bool = False) -> tuple[float, float]:
@@ -85,14 +89,25 @@ def _validate(generator, val_loader: DataLoader, config: Config, save_images:boo
 
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser(
+        description="""
+            Run evaluation on a model. Note if config.EXP.NAME is 'bicubic' or 'nearest' a bicubic 
+            or nearest neighbour model will be run instead of a generator
+        """
+    )
+    parser.add_argument("--save_images", type=bool, default=False, help="Should the SR images be saved")
+    parser.add_argument("--concat_w_gt", type=bool, default=False, help="Should the GT images be saved alongside the SR images")
+    parser.add_argument("--gpath", type=str, default=None, help="If the model being evaluated is not from a experiment i.e. the weights are not in the /results/ folder, the absolute path to the weights can be given here")
+    args = parser.parse_args()
+    
     config = Config()
 
     # Set the model to test - model should be in /results/ folder, else use gpath parameter for test func
-    config.EXP.NAME = "resnet50"
+    config.EXP.NAME = "ablation-patchwise-st"
 
     # Set the dataset to test on
     config.DATA.TEST_SET = "Set5"
     config.DATA.TEST_GT_IMAGES_DIR = F"/work3/{config.EXP.USER}/data/{config.DATA.TEST_SET}/GTmod12"
     config.DATA.TEST_LR_IMAGES_DIR = f"/work3/{config.EXP.USER}/data/{config.DATA.TEST_SET}/LRbicx4"
 
-    test(config = config, save_images = True, concat_w_gt = False)
+    test(config = config, save_images = args.save_images, concat_w_gt = args.concat_w_gt, g_path=args.gpath)
