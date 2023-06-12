@@ -69,6 +69,9 @@ class Generator(nn.Module):
         num_rcb: int = config.MODEL.G_N_RCB
         upscale: int = config.DATA.UPSCALE_FACTOR
 
+        # Better weight initialization, see ESRGAN appendix and Kaming He paper "Deep Residual Learning for Image Recognition"
+        # TODO: https://stackoverflow.com/questions/49433936/how-do-i-initialize-weights-in-pytorch
+
         # Low frequency information extraction layer
         self.conv1 = nn.Sequential(
             nn.Conv2d(in_channels, channels, (9, 9), (1, 1), (4, 4)),
@@ -155,9 +158,15 @@ class _ResidualConvBlock(nn.Module):
 
     def forward(self, x: Tensor) -> Tensor:
         identity = x
-
         x = self.rcb(x)
-
         x = torch.add(x, identity)
-
         return x
+
+
+if __name__ == "__main__":
+    from config import Config
+    c = Config()
+    d = Discriminator(c)
+    g = Generator(c)
+    print(f"Generator has: {sum(p.numel() for p in g.parameters())} parameters")    # 1547350 parameters
+    print(f"Discriminator has: {sum(p.numel() for p in d.parameters())} parameters")# 23563649 parameters
