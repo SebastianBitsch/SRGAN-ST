@@ -3,6 +3,7 @@ import os
 import sys
 import inspect
 
+from tqdm import tqdm
 import numpy as np
 import torch
 from torchvision.io import read_image
@@ -14,6 +15,7 @@ sys.path.insert(0, parentdir)
 from config import Config
 from model import Generator
 from utils import tensor2img, load_state_dict
+from bicubic import Bicubic, NearestNeighbourUpscale
 
 def save_image_patch(config: Config, generator_names: list[str], image_name:str, xmin:int, xmax:int, ymin:int, ymax:int) -> None:
     """
@@ -51,12 +53,17 @@ def save_image_patch(config: Config, generator_names: list[str], image_name:str,
 
 
     with torch.no_grad():
-        for generator_name in generator_names:
+        for generator_name in tqdm(generator_names):
 
-            # Load weights of generator
-            generator = Generator(config).to(config.DEVICE)
-            weights = torch.load(f"results/{generator_name}/g_best.pth")
-            generator = load_state_dict(generator, weights)
+            # Initialize generator and load weights
+            if generator_name == "bicubic":
+                generator = Bicubic(device=config.DEVICE).to(config.DEVICE)
+            elif generator_name == "nearest":
+                generator = NearestNeighbourUpscale(config.DATA.UPSCALE_FACTOR).to(config.DEVICE)
+            else:
+                generator = Generator(config).to(config.DEVICE)
+                weights = torch.load(f"results/{generator_name}/g_best.pth", map_location=config.DEVICE)
+                generator = load_state_dict(generator, weights)
 
             sr = generator(lr)
             output = tensor2img(sr)
@@ -73,6 +80,6 @@ if __name__ == "__main__":
     config.DATA.TEST_LR_IMAGES_DIR = f"/work3/{config.EXP.USER}/data/{config.DATA.TEST_SET}/LRbicx4"
 
     image_name = "baboon"
-    models = ["resnet50"]
+    models = ["resnet50", "bicubic", "nearest"]
 
     save_image_patch(config=config, generator_names=models, image_name=image_name, xmin=20, xmax = 100, ymin = 0, ymax = 200)
