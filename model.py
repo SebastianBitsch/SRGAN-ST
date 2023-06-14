@@ -5,8 +5,22 @@ from torch import Tensor
 from torch import nn
 
 class Discriminator(nn.Module):
+    """
+    A discriminator with the exact architechture described in the SRGAN paper.
+
+    Note: doesnt have a sigmoid layer at the end - will return output from linear layer. this is by design.
+    Note: only support 96x96 images - could be extended by another layer to accomdate larger images
+    """
+
     def __init__(self, config) -> None:
-        """ Note: only support 96x96 images atm """
+        """
+        Initialize discriminator
+
+        Parameters
+        ----------
+        config: Config, a config object from which settings are read. in particular:
+            MODEL.D_IN_CHANNEL, MODEL.D_N_CHANNEL, MODEL.D_OUT_CHANNEL
+        """
         super(Discriminator, self).__init__()
 
         in_channels = config.MODEL.D_IN_CHANNEL
@@ -58,10 +72,19 @@ class Discriminator(nn.Module):
 
 
 class Generator(nn.Module):
-    def __init__(
-            self,
-            config
-    ) -> None:
+    """
+    A generator module as described in SRGAN - follows the architechture outlined there.
+    """
+
+    def __init__(self, config) -> None:
+        """
+        Initialize generator.
+
+        Parameters
+        ----------
+        config: Config, the config to read settings from. Of importance are:
+            MODEL.G_IN_CHANNEL, MODEL.G_OUT_CHANNEL, MODEL.G_N_CHANNEL, MODEL.G_N_RCB, DATA.UPSCALE_FACTOR
+        """
         super(Generator, self).__init__()
         in_channels: int = config.MODEL.G_IN_CHANNEL
         out_channels: int = config.MODEL.G_OUT_CHANNEL
@@ -70,6 +93,7 @@ class Generator(nn.Module):
         upscale: int = config.DATA.UPSCALE_FACTOR
 
         # Better weight initialization, see ESRGAN appendix and Kaming He paper "Deep Residual Learning for Image Recognition"
+        # Promises better results without BN artifacts
         # TODO: https://stackoverflow.com/questions/49433936/how-do-i-initialize-weights-in-pytorch
 
         # Low frequency information extraction layer
@@ -139,11 +163,8 @@ class _UpsampleBlock(nn.Module):
 
     def forward(self, x: Tensor) -> Tensor:
         x = self.upsample_block(x)
-
         return x
     
-
-
 
 class _ResidualConvBlock(nn.Module):
     def __init__(self, channels: int) -> None:
@@ -161,6 +182,7 @@ class _ResidualConvBlock(nn.Module):
         x = self.rcb(x)
         x = torch.add(x, identity)
         return x
+
 
 
 if __name__ == "__main__":
