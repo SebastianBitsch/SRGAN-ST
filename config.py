@@ -1,7 +1,5 @@
 from torch import nn, cuda
 
-from loss import ContentLossVGG
-
 class dotdict(dict):
     """
     Cheeky helper class that adds dot.notation access to dictionary attributes. 
@@ -33,12 +31,12 @@ class Config():
 
     # Data
     DATA = dotdict()
-    DATA.TRAIN_GT_IMAGES_DIR = f"/work3/{EXP.USER}/data/ImageNet/train"             # Location of training HR gt images 
+    DATA.TRAIN_GT_IMAGES_DIR = f"/work3/{EXP.USER}/data/train"                      # Location of training HR gt images 
     DATA.TEST_SET = 'Set5'                                                          # The test set to use; Set5, Set14, BSD100, Urban100
     DATA.TEST_GT_IMAGES_DIR = F"/work3/{EXP.USER}/data/{DATA.TEST_SET}/GTmod12"     # Location of test HR images
     DATA.TEST_LR_IMAGES_DIR = f"/work3/{EXP.USER}/data/{DATA.TEST_SET}/LRbicx4"     # Location of test downscaled images
-    DATA.TEST_SR_IMAGES_DIR = "results/test"                                        # Directory to output the SR images to in test.py
-    DATA.SEED = 1312            # The seed to use for reproducability
+    DATA.TEST_SR_IMAGES_DIR = "results/_test"                                       # Directory to output the SR images to in test.py
+    DATA.SEED = 0               # The seed to use for reproducability
     DATA.UPSCALE_FACTOR = 4     # The upscale factor, only really tested for 4
     DATA.BATCH_SIZE = 16        # The batchsize of images to use
     DATA.GT_IMAGE_SIZE = 96     # Size of the HR ground truth images i.e. 192 x 192
@@ -72,19 +70,17 @@ class Config():
     # The loss functions used in the generator by default. More can be added after instantiating
     MODEL.G_LOSS.CRITERIONS = {
         "Adversarial"   : nn.BCEWithLogitsLoss(),
-        "ContentVGG"    : ContentLossVGG(MODEL.G_LOSS.VGG19_LAYERS, device=DEVICE),
-        "Pixel"         : nn.MSELoss(),
     }
     # How to weigh the loss functions used in the generator
     MODEL.G_LOSS.CRITERION_WEIGHTS = {   #TODO
         "Adversarial"   : 0.001,
         "ContentVGG"    : 1.0,
-        "ContentDiscriminator" : 1000.0,
+        "ContentDiscriminator" : 2000.0,
         "Pixel"         : 1.0,
         "BestBuddy"     : 50.0,
         "Gram"          : 500.0,
         "PatchwiseST"   : 100.0,
-        "ST"            : 10.0
+        "ST"            : 1/3
     }
     # Which criterions should the generator use during warmup. Defaults to just pixel loss
     MODEL.G_LOSS.WARMUP_CRITERIONS = {
