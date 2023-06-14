@@ -1,9 +1,13 @@
 import os
+
+from torch import nn
+
 from config import Config
+from loss import BestBuddyLoss, GramLoss, PatchwiseStructureTensorLoss, StructureTensorLoss, ContentLossDiscriminator, ContentLossVGG
+
 from train import train
 from warmup import warmup
 from validate import test
-from loss import BestBuddyLoss, GramLoss, PatchwiseStructureTensorLoss, StructureTensorLoss, ContentLossDiscriminator
 
 
 def get_jobindex(fallback:int = 0) -> int:
@@ -21,57 +25,63 @@ def warmup_gan(config: Config, epochs:int = 5) -> Config:
     return config
 
 
-def srgan_bbgan(config: Config, index:int) -> Config:
-    """ stock srgan vs bbgan"""
-    config.EXP.NAME = ['stock-srgan-fixed-adv', 'stock-bbgan-lorna-fixed-adv'][index]
-    config.MODEL.CONTINUE_FROM_WARMUP = True
-    config.MODEL.WARMUP_WEIGHTS = "results/resnet20/g_best.pth"
-    # config.MODEL.WARMUP_WEIGHTS = "results/SRResNet-lorna-pretrained.pth.tar"
-    if index == 1:
-        config.add_g_criterion("BestBuddy", BestBuddyLoss(), 1.0)
-    return config
 
-
-
-def ablation_study(config: Config, index:int) -> Config:
-    config.EXP.NAME = ['ablation-plain', 'ablation-bestbuddy', 'ablation-gram', 'ablation-patchwise-st', 'ablation-st'][index]
+def assorted_tests(config, i):
+    # config.EXP.NAME = ['ablation-cd-plain', 'ablation-cd-bestbuddy', 'ablation-cd-gram', 'ablation-cd-patchwise-st', 'ablation-cd-st'][i]
     config.MODEL.G_CONTINUE_FROM_WARMUP = True
     config.MODEL.G_WARMUP_WEIGHTS = "results/SRResNet-lorna-pretrained.pth"
+    config.MODEL.D_CONTINUE_FROM_WARMUP = True
+    config.MODEL.D_WARMUP_WEIGHTS = "results/discriminator-lorna-pretrained.pth"
     config.SOLVER.D_UPDATE_INTERVAL = 100
     config.EXP.LABEL_SMOOTHING = 0.1
     config.G_CHECKPOINT_INTERVAL = 5
 
-    config.remove_g_criterion("Pixel")
-
-    if index == 0: # srgan
-        pass
-    if index == 1:
-        config.add_g_criterion("BestBuddy", BestBuddyLoss(), 50.0)
-    elif index == 2:
-        config.add_g_criterion("Gram", GramLoss(), 500.0)
-    elif index == 3:
+    # if i == 0: # go
+    #     config.EXP.NAME = "srgan-w-pixel-reweight"
+    #     config.add_g_criterion("Pixel", nn.MSELoss(), weight=1.0)
+    #     config.add_g_criterion("ContentVGG", ContentLossVGG(config), weight = 1.0)
+    # if i == 1: # go
+        # config.EXP.NAME = "patchwise-st-w-pixel-reweight-try2"
+        # config.add_g_criterion("Pixel", nn.MSELoss(), weight=1.0)
+        # config.add_g_criterion("ContentVGG", ContentLossVGG(config), weight = 1.0)
+        # config.add_g_criterion("PatchwiseST", PatchwiseStructureTensorLoss(), 100.0)
+    # if i == 2: # - running
+    #     config.EXP.NAME = "st-c-pixel-reweight"
+    #     config.add_g_criterion("Pixel", nn.MSELoss(), weight=1.0)
+    #     # config.add_g_criterion("ContentDiscriminator", ContentLossDiscriminator(config), weight = 2000.0)
+    #     config.add_g_criterion("ContentVGG", ContentLossVGG(config), weight = 1.0)
+    #     config.add_g_criterion("ST", StructureTensorLoss(), 1/3)
+    # if i == 3: # - running
+    #     config.EXP.NAME = "st-c-no-pixel-reweighted"
+    #     # config.add_g_criterion("ContentDiscriminator", ContentLossDiscriminator(config), weight = 2000.0)
+    #     config.add_g_criterion("ContentVGG", ContentLossVGG(config), weight = 1.0)
+    #     config.add_g_criterion("ST", StructureTensorLoss(), 1/3)
+    # if i == 4: # - go
+    #     config.EXP.NAME = "srgan-double-content"
+    #     config.add_g_criterion("Pixel", nn.MSELoss(), weight=1.0)
+    #     config.add_g_criterion("ContentVGG", ContentLossVGG(config), weight = 1.0)
+    #     config.add_g_criterion("ContentDiscriminator", ContentLossDiscriminator(config), weight = 2000.0)
+    # if i == 5: # - go
+    #     config.EXP.NAME = "patchwise-st-double-content"
+    #     config.add_g_criterion("Pixel", nn.MSELoss(), weight=1.0)
+    #     config.add_g_criterion("ContentVGG", ContentLossVGG(config), weight = 1.0)
+    #     config.add_g_criterion("ContentDiscriminator", ContentLossDiscriminator(config), weight = 2000.0)
+    #     config.add_g_criterion("PatchwiseST", PatchwiseStructureTensorLoss(), 100.0)
+    if i == 0: # - go
+        config.EXP.NAME = "srgan-double-content-no-pixel"
+        config.add_g_criterion("ContentVGG", ContentLossVGG(config), weight = 1.0)
+        config.add_g_criterion("ContentDiscriminator", ContentLossDiscriminator(config), weight = 2000.0)
+    if i == 1: # - go
+        config.EXP.NAME = "patchwise-st-double-content-no-pixel"
+        config.add_g_criterion("ContentVGG", ContentLossVGG(config), weight = 1.0)
+        config.add_g_criterion("ContentDiscriminator", ContentLossDiscriminator(config), weight = 2000.0)
         config.add_g_criterion("PatchwiseST", PatchwiseStructureTensorLoss(), 100.0)
-    elif index == 4:
-        config.add_g_criterion("ST", StructureTensorLoss(), 10.0)
-    
-    return config
+    if i == 2: # - go
+        config.EXP.NAME = "patchwise-st-double-content-no-pixel-a100"
+        config.add_g_criterion("ContentVGG", ContentLossVGG(config), weight = 1.0)
+        config.add_g_criterion("ContentDiscriminator", ContentLossDiscriminator(config), weight = 2000.0)
+        config.add_g_criterion("PatchwiseST", PatchwiseStructureTensorLoss(), 100.0)
 
-def best_buddy_test(config, i):
-    config.EXP.NAME = ['bb-no-pixel-w-warmup', 'bb-content1', 'bb-w-pixel-content0'][i]
-    config.SOLVER.D_UPDATE_INTERVAL = 100
-    config.EXP.LABEL_SMOOTHING = 0.1
-    config.add_g_criterion("BestBuddy", BestBuddyLoss(), 50.0)
-    config.MODEL.G_CONTINUE_FROM_WARMUP = True
-    config.MODEL.G_WARMUP_WEIGHTS = "results/SRResNet-lorna-pretrained.pth"#"results/SRRESNET/g_best.pth.tar"
-
-    if i == 0:
-        config.remove_g_criterion("Pixel")
-    elif i == 1:
-        config.remove_g_criterion("ContentVGG")
-        config.add_g_criterion("ContentDiscriminator", ContentLossDiscriminator(extraction_layers=config.MODEL.G_LOSS.DISC_FEATURES_LOSS_LAYERS, config=config), 2.0)
-    elif i == 2:
-        pass
-    
     return config
 
 
@@ -81,11 +91,12 @@ if __name__ == "__main__":
     job_index = get_jobindex()
     print(f"Running job: {job_index}")
 
-    # Edit config based on 
     config = Config()
 
-    config = ablation_study(config, job_index)
+    # config = ablation_study(config, job_index)
+    config = assorted_tests(config, job_index)
 
+    # Train and validate the experiment given by the config file
     train(config = config)
     test(config = config, save_images = True)
 
