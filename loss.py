@@ -1,36 +1,33 @@
 import torch
-from collections import defaultdict
 from torch import nn, Tensor
-from functools import reduce
-
 import torch.nn.functional as F
 from torchvision import models
 from torchvision import transforms
 from torchvision.models.feature_extraction import create_feature_extractor
-from model import Discriminator
 
+from model import Discriminator
 from utils import batch_pairwise_distance, structure_tensor, normalize, compute_invS1xS2, compute_eigenvalues, compute_distance
 
 class ContentLossVGG(nn.Module):
-    """Constructs a content loss function based on the VGG19 network.
+    """
+    Constructs a content loss function based on a pretrained VGG19 network.
     Using high-level feature mapping layers from the latter layers will focus more on the texture content of the image.
+    Follows the method outlined in GramGAN paper for computing a loss from the activation layer 
+    in the pre-trained VGG19 network.
 
-    Paper reference list:
-        -`Photo-Realistic Single Image Super-Resolution Using a Generative Adversarial Network <https://arxiv.org/pdf/1609.04802.pdf>` paper.
-        -`ESRGAN: Enhanced Super-Resolution Generative Adversarial Networks                    <https://arxiv.org/pdf/1809.00219.pdf>` paper.
-        -`Perceptual Extreme Super Resolution Network with Receptive Field Block               <https://arxiv.org/pdf/2005.12597.pdf>` paper.
-
-        See: https://www.researchgate.net/figure/llustration-of-the-network-architecture-of-VGG-19-model-conv-means-convolution-FC-means_fig2_325137356
-     """
+    For VGG achitechture (layer names) see: https://www.researchgate.net/figure/llustration-of-the-network-architecture-of-VGG-19-model-conv-means-convolution-FC-means_fig2_325137356
+    """
 
     def __init__(self, config, criterion:str = "mse") -> None:
         """
-        Content loss (in SRGAN) / Perceptual loss (in GramGAN).
-        Follows the method outlined in GramGAN paper for computing a loss from the activation layer 
-        in the pre-trained VGG19 network.
-        
+        Initialize a ContentLossVGG.
+        Change config.MODEL.G_LOSS.VGG19_LAYERS to set what layers and weights to use in the
+        feature extractor. See above link for list of layer names.
+
         Parameters
-            extraction_layers (dict): A dict of layer
+        ----------
+            config: Config, the config object to take options from. 
+            criterion: str, loss criterion to use; only l1 and l2 supported
         """
         super(ContentLossVGG, self).__init__()
 
@@ -73,31 +70,33 @@ class ContentLossVGG(nn.Module):
         return loss
     
     def __repr__(self):
-        """ Only used to make logging to tensorboard look nicer """
+        # Only used to make logging to tensorboard look nicer
         return "ContentLoss()"
 
 
 
-class EuclidLoss(nn.Module):
-    """  """
-
-    def __init__(self) -> None:
-        super(EuclidLoss, self).__init__()
-        self.pdist = nn.PairwiseDistance(p=2)
-
-    def forward(self, sr_tensor: Tensor, gt_tensor: Tensor) -> Tensor:        
-        sr_tensor = torch.flatten(sr_tensor)
-        gt_tensor = torch.flatten(gt_tensor)
-        
-        loss = self.pdist(sr_tensor, gt_tensor)
-
-        return loss
-
-
 class BestBuddyLoss(nn.Module):
-    """ https://github.com/dvlab-research/Simple-SR/blob/08c71e9e46ba781df50893f0476ecd0fc004aa45/utils/loss.py#L54 """
+    """
+    Best-buddy loss implmentation as seen in the Best-Buddy GAN paper.
+    This implementation is a slightly modified version of the implmentation from the official 
+    BBGAN github repo. For more details see:
+    https://github.com/dvlab-research/Simple-SR/blob/08c71e9e46ba781df50893f0476ecd0fc004aa45/utils/loss.py#L54
+    """
+    
     def __init__(self, alpha:float=1.0, beta:float=1.0, ksize:int=3, pad:int=0, stride:int=3, dist_norm:str='l2', criterion:str='l1') -> None:
-        """ """
+        """
+        Initialize a BBLoss instance
+
+        Parameters
+        ----------
+            alpha: float, scaling parameter for estimated image
+            beta: float, scaling parameter for ground truth image
+            ksize: int, patch size
+            pad: int, padding around edges
+            stride: int, stride. use same as ksize for non-overlapping patches
+            dist_norm: str, distance measure to use; only l1 and l2 supported atm
+            criterion: str, loss criterion to use; only l1 and l2 supported atm
+        """
         super(BestBuddyLoss, self).__init__()
         self.alpha = alpha
         self.beta = beta
@@ -143,10 +142,28 @@ class BestBuddyLoss(nn.Module):
 
 
 
+
 class GramLoss(nn.Module):
-    """"""
+    """
+    A loss implmentation based on the loss function described in the Gram-GAN paper.
+    It is built on top of our Best-Buddy loss and selects the best patch based on the
+    difference between gram matrices. 
+    """
+
     def __init__(self, alpha:float=1.0, beta:float=1.0, ksize:int=3, dist_norm:str='l2', criterion:str='l1') -> None:
-        """ Note: image size must be devisable by ksize """
+        
+        """
+        Initialize a GramLoss instance
+        Note: for now image size must be devisable by ksize
+
+        Parameters
+        ----------
+            alpha: float, scaling parameter for estimated image
+            beta: float, scaling parameter for ground truth image
+            ksize: int, patch size
+            dist_norm: str, distance measure to use; only l1 and l2 supported atm
+            criterion: str, loss criterion to use; only l1 and l2 supported atm
+        """
         super(GramLoss, self).__init__()
         self.alpha = alpha
         self.beta = beta
@@ -209,9 +226,26 @@ class GramLoss(nn.Module):
 
 
 
+
 class ContentLossDiscriminator(nn.Module):
+    """
+    A content loss based on the feaures of a fully trained discriminator model as seen in model.py.
+    Computes loss as the difference between activations of x and gt for a list of layers for the
+    discriminator.
+    Based on the idea presented in the ESRGAN paper. See that paper for motivation.
+    """
     
     def __init__(self, config, criterion:str = "mse") -> None:
+        """
+        Initialize a ContentLossDiscriminator.
+        Change config.MODEL.G_LOSS.DISC_FEATURES_LOSS_LAYERS to set what layers and weights 
+        to use in the feature extractor. See above link for list of layer names
+
+        Parameters
+        ----------
+            config: Config, the config object to take options from. 
+            criterion: str, loss criterion to use; only l1 and l2 supported
+        """
         super(ContentLossDiscriminator, self).__init__()
             
         if criterion == 'l1':
@@ -254,8 +288,30 @@ class ContentLossDiscriminator(nn.Module):
 
 
 
+
 class PatchwiseStructureTensorLoss(nn.Module):
-    def __init__(self, sigma=0.5, rho=2, alpha=1.0, beta=1.0, ksize=3, dist_norm='l2', criterion='l1'):
+    """
+    Implmentation of a loss function that mixes Best-Buddy Loss and Structure Tensors.
+    Computes loss as the sum of differences between the structure tensor of the estimated patches
+    and the structure tensor of the best-buddy (most alike) patches.
+    
+    Note: Doesnt support large patch sizes yet.
+    """
+
+    def __init__(self, sigma:float=0.5, rho:float=2, alpha:float=1.0, beta:float=1.0, ksize:int=3, dist_norm:str='l2', criterion:str='l1'):
+        """
+        Initialize a PatchwiseStructureTensorLoss instance
+
+        Parameters
+        ----------
+            sigma: float, structure tensor parameter
+            rho: float, structure tensor parameter
+            alpha: float, scaling parameter for estimated image
+            beta: float, scaling parameter for ground truth image
+            ksize: int, patch size
+            dist_norm: str, distance measure to use; only l1 and l2 supported atm
+            criterion: str, loss criterion to use; only l1 and l2 supported atm
+        """
         super(PatchwiseStructureTensorLoss, self).__init__()
         self.alpha = alpha
         self.beta = beta
@@ -319,21 +375,35 @@ class PatchwiseStructureTensorLoss(nn.Module):
         return loss
 
 
+
+
 class StructureTensorLoss(nn.Module):
-    def __init__(self, sigma=0.5, rho=2):
+    """
+    """
+
+    def __init__(self, sigma:float=0.5, rho:float=2.0, normalize:bool=True):
+        """
+        Initialize a structure tensor loss object
+        
+        Parameters
+        ----------
+            sigma: float, structure tensor parameter
+            rho: float, structure tensor parameter
+        """
         super(StructureTensorLoss, self).__init__()
         self.sigma = sigma
         self.rho = rho
+        self.normalize = normalize
     
     
-    def st_loss(self, x, gt, normalize = True):
+    def st_loss(self, x, gt):
         x = transforms.Grayscale()(x)
         gt = transforms.Grayscale()(gt)
 
         s_x = structure_tensor(x, sigma=self.sigma, rho=self.rho)
         s_gt = structure_tensor(gt, sigma=self.sigma, rho=self.rho)
 
-        M = compute_invS1xS2(s_x, s_gt, normalize)
+        M = compute_invS1xS2(s_x, s_gt, self.normalize)
         L = compute_eigenvalues(M)
         d = compute_distance(L)
         return d.mean()
