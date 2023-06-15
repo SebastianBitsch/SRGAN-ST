@@ -13,13 +13,14 @@ from utils import init_random_seed, load_state_dict
 from validate import _validate
 
 
-def train(config: Config = None):
+def train(config: Config):
     
     # Set seed
     init_random_seed(config.DATA.SEED)
 
     # House keeping variables
-    best_psnr = best_ssim = 0.0
+    best_psnr = 0.0
+    best_ssim = 0.0
     loss_values = dict()
 
     # Dataloaders
@@ -87,12 +88,12 @@ def train(config: Config = None):
 
     # Should model weights be loaded from warmup?
     if config.MODEL.G_CONTINUE_FROM_WARMUP:
-        weights = torch.load(config.MODEL.G_WARMUP_WEIGHTS)
-        generator = load_state_dict(generator, weights)# .load_state_dict(weights, strict=False)
+        weights = torch.load(config.MODEL.G_WARMUP_WEIGHTS, map_location=config.DEVICE)
+        generator = load_state_dict(generator, weights)
 
     if config.MODEL.D_CONTINUE_FROM_WARMUP:
-        weights = torch.load(config.MODEL.D_WARMUP_WEIGHTS)
-        discriminator = load_state_dict(discriminator, weights) # discriminator.load_state_dict(weights, strict=False)
+        weights = torch.load(config.MODEL.D_WARMUP_WEIGHTS, map_location=config.DEVICE)
+        discriminator = load_state_dict(discriminator, weights)
 
     # Init Tensorboard writer to store train and test info
     # also save the config used in this run to Tensorboard
@@ -206,7 +207,7 @@ def train(config: Config = None):
         results_dir = f"results/{config.EXP.NAME}"
         os.makedirs(results_dir, exist_ok=True)
         
-        # Always latest states, will be overwritten next epoch - but will eventually contain the last epoch weights
+        # Always save latest states, will be overwritten next epoch - but will eventually contain the last epoch weights
         torch.save(generator.state_dict(), results_dir  + "/g_last.pth")
         torch.save(discriminator.state_dict(), results_dir  + "/d_last.pth")
 
@@ -223,3 +224,8 @@ def train(config: Config = None):
             torch.save(generator.state_dict(), results_dir  + f"/g_epoch{epoch}.pth")
         if 0 < epoch and epoch % config.D_CHECKPOINT_INTERVAL == 0:
             torch.save(discriminator.state_dict(), results_dir  + f"/d_epoch{epoch}.pth")
+
+
+if __name__ == "__main__":
+    config = Config()
+    train(config)
