@@ -72,7 +72,9 @@ class Config():
         "Adversarial"   : nn.BCEWithLogitsLoss(),
     }
     # How to weigh the loss functions used in the generator
-    MODEL.G_LOSS.CRITERION_WEIGHTS = {   #TODO
+    # TODO: Might be nicer with non manual weighting - i.e. all losses contribute exactly equal amounts.
+    # See: https://discuss.pytorch.org/t/how-to-normalize-losses-of-different-scale/126995
+    MODEL.G_LOSS.CRITERION_WEIGHTS = {
         "Adversarial"   : 0.001,
         "ContentVGG"    : 1.0,
         "ContentDiscriminator" : 2000.0,
