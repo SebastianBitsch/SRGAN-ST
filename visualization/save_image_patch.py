@@ -29,7 +29,7 @@ def save_image_patch(config: Config, generator_names: list[str], image_name:str,
     """
 
     # Make a directory in the test/_patch dir to store the images from every generator
-    base_path = os.path.join(config.DATA.TEST_SR_IMAGES_DIR, "_patch", f"{image_name}.png")
+    base_path = os.path.join("visualization/plots/_patch", f"{image_name}.png")
     os.makedirs(base_path, exist_ok=True)
 
     # Read LR and GT images
@@ -43,10 +43,14 @@ def save_image_patch(config: Config, generator_names: list[str], image_name:str,
     cv2.imwrite(f"{base_path}/{image_name}_gt.png", gt_patch)
 
     # Draw red rect on gt image
-    gt[xmin,ymin:ymax,:] = np.array([0,0,255])
-    gt[xmax,ymin:ymax,:] = np.array([0,0,255])
-    gt[xmin:xmax,ymin,:] = np.array([0,0,255])
-    gt[xmin:xmax,ymax,:] = np.array([0,0,255])
+    gt[xmin,ymin:ymax+1,:] = np.array([0,0,255])
+    gt[xmin-1,ymin:ymax+1,:] = np.array([0,0,255])
+    gt[xmax,ymin:ymax+1,:] = np.array([0,0,255])
+    gt[xmax+1,ymin:ymax+1,:] = np.array([0,0,255])
+    gt[xmin:xmax+1,ymin,:] = np.array([0,0,255])
+    gt[xmin:xmax+1,ymin-1,:] = np.array([0,0,255])
+    gt[xmin:xmax+1,ymax,:] = np.array([0,0,255])
+    gt[xmin:xmax+1,ymax+1,:] = np.array([0,0,255])
 
     # Save the entire gt image with red rect
     cv2.imwrite(f"{base_path}/gt.png", gt)
@@ -70,16 +74,22 @@ def save_image_patch(config: Config, generator_names: list[str], image_name:str,
 
             # Save only the slize
             patch = output[xmin:xmax, ymin:ymax, :]
+            print(f"{base_path}/{image_name}_{generator_name}.png")
             cv2.imwrite(f"{base_path}/{image_name}_{generator_name}.png", patch)
 
 
 if __name__ == "__main__":
     config = Config()
-    config.DATA.TEST_SET = "Set14"
+    config.DATA.TEST_SET = "Urban100"
     config.DATA.TEST_GT_IMAGES_DIR = F"/work3/{config.EXP.USER}/data/{config.DATA.TEST_SET}/GTmod12"
     config.DATA.TEST_LR_IMAGES_DIR = f"/work3/{config.EXP.USER}/data/{config.DATA.TEST_SET}/LRbicx4"
 
-    image_name = "baboon"
-    models = ["resnet50", "bicubic", "nearest"]
+    image_name = "img_024"
+    models = [
+        "ablation-patchwise-st",
+        "patchwise-st-cd-no-pixel",
+        "st-c-no-pixel-reweighted",
+        "st-cd-no-pixel-reweighted"
+    ]
 
-    save_image_patch(config=config, generator_names=models, image_name=image_name, xmin=20, xmax = 100, ymin = 0, ymax = 200)
+    save_image_patch(config=config, generator_names=models, image_name=image_name, xmin=335, xmax = 335+75, ymin = 760, ymax = 760+75)
