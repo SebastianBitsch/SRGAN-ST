@@ -57,6 +57,9 @@ See ```python validate.py -h``` for more options
 
 ***
 
+### Acknowledgement
+This repo is loosely based on the work of Github user Lornatangs [repo](https://github.com/Lornatang/SRGAN-PyTorch) for SISR using SRGAN.
+
 
 ### Notes
 * Moduler: [link](https://www.hpc.dtu.dk/?page_id=282)
